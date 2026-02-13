@@ -24,6 +24,8 @@ import base64
 import io
 import json
 import logging
+import platform
+import time
 import uuid
 from pathlib import Path
 
@@ -74,6 +76,9 @@ _settings_lock = asyncio.Lock()
 # Set by run_dashboard() so the startup event can open the browser once the server is ready
 _open_browser_url: str | None = None
 
+# Server startup time for uptime calculation
+_startup_time: float = time.time()
+
 # Get frontend directory
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 TEMPLATES_DIR = FRONTEND_DIR / "templates"
@@ -120,6 +125,111 @@ async def security_headers_middleware(request: Request, call_next):
     if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
+@app.get("/api/health")
+async def health_check():
+    """Comprehensive health check endpoint with subsystem diagnostics."""
+    from pocketclaw import __version__
+    from pocketclaw.config import get_settings
+    from pocketclaw.memory import get_memory_manager
+    
+    settings = get_settings()
+    bus = get_message_bus()
+    memory_manager = get_memory_manager()
+    
+    # Calculate uptime
+    uptime_seconds = int(time.time() - _startup_time)
+    
+    # Check subsystems
+    subsystems = {}
+    critical_failures = []
+    
+    # Agent Backend Status
+    try:
+        backend = settings.agent_backend
+        subsystems["agent_backend"] = {
+            "status": "ok",
+            "backend": backend
+        }
+    except Exception as e:
+        subsystems["agent_backend"] = {"status": "error", "error": str(e)}
+        critical_failures.append("agent_backend")
+    
+    # Memory Status
+    try:
+        sessions_count = 0
+        if hasattr(memory_manager._store, 'sessions_path'):
+            # Count session files
+            sessions_path = memory_manager._store.sessions_path
+            if sessions_path.exists():
+                sessions_count = len(list(sessions_path.glob("*.json")))
+        
+        subsystems["memory"] = {
+            "status": "ok",
+            "backend": settings.memory_backend,
+            "sessions": sessions_count
+        }
+    except Exception as e:
+        subsystems["memory"] = {"status": "error", "error": str(e)}
+        critical_failures.append("memory")
+    
+    # Message Bus Status
+    try:
+        subscriber_count = sum(len(subs) for subs in bus._outbound_subscribers.values())
+        subsystems["message_bus"] = {
+            "status": "ok",
+            "subscribers": subscriber_count,
+            "pending_inbound": bus.inbound_pending()
+        }
+    except Exception as e:
+        subsystems["message_bus"] = {"status": "error", "error": str(e)}
+        critical_failures.append("message_bus")
+    
+    # Channels Status
+    try:
+        channels_status = {}
+        all_channels = [
+            "discord", "slack", "whatsapp", "telegram", 
+            "signal", "matrix", "teams", "google_chat"
+        ]
+        for ch in all_channels:
+            is_configured = _channel_is_configured(ch, settings)
+            is_running = _channel_is_running(ch)
+            
+            if is_running:
+                channels_status[ch] = "connected"
+            elif is_configured:
+                channels_status[ch] = "disconnected"
+            else:
+                channels_status[ch] = "not_configured"
+        
+        subsystems["channels"] = channels_status
+    except Exception as e:
+        subsystems["channels"] = {"status": "error", "error": str(e)}
+    
+    # Determine overall status
+    if critical_failures:
+        status = "unhealthy"
+        http_status = 503
+    elif any(s.get("status") == "error" for s in subsystems.values() if isinstance(s, dict)):
+        status = "degraded"
+        http_status = 200
+    else:
+        status = "healthy"
+        http_status = 200
+    
+    health_data = {
+        "status": status,
+        "version": __version__,
+        "uptime_seconds": uptime_seconds,
+        "subsystems": subsystems,
+        "python_version": platform.python_version(),
+        "platform": platform.system().lower()
+    }
+    
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=health_data, status_code=http_status)
 
 
 # Mount static files

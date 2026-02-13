@@ -150,14 +150,25 @@ class ServerManager:
         return False
 
     def is_healthy(self) -> bool:
-        """Check if the server responds to HTTP."""
+        """Check if the server responds to health endpoint."""
         try:
-            url = f"http://127.0.0.1:{self.port}/"
+            url = f"http://127.0.0.1:{self.port}/api/health"
             req = urllib.request.Request(url, method="GET")
             resp = urllib.request.urlopen(req, timeout=3)
-            return resp.status == 200
-        except Exception:
+            if resp.status == 200:
+                # Parse health response
+                data = json.loads(resp.read().decode('utf-8'))
+                return data.get("status") in ["healthy", "degraded"]
             return False
+        except Exception:
+            # Fallback to basic root check for backward compatibility
+            try:
+                url = f"http://127.0.0.1:{self.port}/"
+                req = urllib.request.Request(url, method="GET")
+                resp = urllib.request.urlopen(req, timeout=3)
+                return resp.status == 200
+            except Exception:
+                return False
 
     def get_dashboard_url(self) -> str:
         """Get the URL to open in the browser."""

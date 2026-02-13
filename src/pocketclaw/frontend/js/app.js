@@ -53,6 +53,13 @@ function app() {
             battery: '...'
         },
 
+        // Health check status
+        healthStatus: 'unknown',
+        healthVersion: '',
+        healthUptime: 0,
+        healthSubsystems: {},
+        healthTooltip: 'Checking health...',
+
         // Settings
         settings: {
             agentBackend: 'claude_agent_sdk',
@@ -182,6 +189,9 @@ function app() {
 
             // Start status polling (low frequency)
             this.startStatusPolling();
+
+            // Start health polling
+            this.startHealthPolling();
 
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
@@ -461,6 +471,63 @@ function app() {
                     socket.runTool('status');
                 }
             }, 10000); // Poll every 10 seconds, not 3
+        },
+
+        /**
+         * Start polling for health status (every 30 seconds)
+         */
+        startHealthPolling() {
+            // Poll immediately on startup
+            this.pollHealth();
+            
+            // Then poll every 30 seconds
+            setInterval(() => {
+                this.pollHealth();
+            }, 30000);
+        },
+
+        /**
+         * Poll health endpoint and update status
+         */
+        async pollHealth() {
+            try {
+                const response = await fetch('/api/health');
+                if (!response.ok) {
+                    this.healthStatus = 'unhealthy';
+                    this.healthTooltip = 'Health check failed';
+                    return;
+                }
+                
+                const data = await response.json();
+                this.healthStatus = data.status;
+                this.healthVersion = data.version;
+                this.healthUptime = data.uptime_seconds;
+                this.healthSubsystems = data.subsystems;
+                
+                // Build tooltip text
+                const failing = Object.entries(data.subsystems)
+                    .filter(([_, subsys]) => subsys.status === 'error')
+                    .map(([name, _]) => name);
+                
+                if (failing.length > 0) {
+                    this.healthTooltip = `Issues: ${failing.join(', ')}`;
+                } else {
+                    this.healthTooltip = 'All systems operational';
+                }
+            } catch (error) {
+                this.healthStatus = 'unhealthy';
+                this.healthTooltip = 'Cannot reach server';
+            }
+        },
+
+        /**
+         * Format uptime seconds to human readable string
+         */
+        formatUptime(seconds) {
+            if (seconds < 60) return `${seconds}s`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+            return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
         },
 
         /**

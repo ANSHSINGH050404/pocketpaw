@@ -23,7 +23,69 @@
     <i data-lucide="paw-print" class="w-5 h-5 text-accent"></i>
     <span class="text-lg font-semibold tracking-tight">PocketPaw</span>
     <span class="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full leading-none">Beta</span>
-    <button class="ml-auto md:hidden" @click="sidebarOpen = false">
+    
+    <!-- Health Indicator -->
+    <div class="relative group ml-auto mr-2 md:ml-0">
+      <div
+        class="w-2.5 h-2.5 rounded-full transition-colors duration-300"
+        :class="{
+          'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]': healthStatus === 'healthy',
+          'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]': healthStatus === 'degraded',
+          'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse': healthStatus === 'unhealthy',
+          'bg-gray-500': healthStatus === 'unknown'
+        }"
+        :title="healthTooltip"
+      ></div>
+      
+      <!-- Health Tooltip Dropdown -->
+      <div class="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 p-3 bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-white/10">
+          <div
+            class="w-2 h-2 rounded-full"
+            :class="{
+              'bg-green-500': healthStatus === 'healthy',
+              'bg-yellow-500': healthStatus === 'degraded',
+              'bg-red-500': healthStatus === 'unhealthy',
+              'bg-gray-500': healthStatus === 'unknown'
+            }"
+          ></div>
+          <span class="text-xs font-medium capitalize" x-text="healthStatus"></span>
+          <span class="ml-auto text-[10px] text-white/40" x-text="'v' + healthVersion"></span>
+        </div>
+        
+        <!-- Subsystem Status -->
+        <div class="space-y-1.5">
+          <template x-for="(subsys, name) in healthSubsystems" :key="name">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-white/60 capitalize" x-text="name.replace('_', ' ')"></span>
+              <div class="flex items-center gap-1.5">
+                <template x-if="name === 'channels'">
+                  <span class="text-white/40" x-text="Object.values(subsys).filter(s => s === 'connected').length + ' connected'"></span>
+                </template>
+                <template x-if="name !== 'channels'">
+                  <span
+                    class="capitalize"
+                    :class="{
+                      'text-green-400': subsys.status === 'ok',
+                      'text-yellow-400': subsys.status === 'error',
+                      'text-red-400': subsys.status === 'error'
+                    }"
+                    x-text="subsys.status || 'ok'"
+                  ></span>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+        
+        <!-- Uptime -->
+        <div class="mt-2 pt-2 border-t border-white/10 text-[10px] text-white/40">
+          Uptime: <span x-text="formatUptime(healthUptime)"></span>
+        </div>
+      </div>
+    </div>
+    
+    <button class="md:hidden" @click="sidebarOpen = false">
         <i data-lucide="x" class="w-5 h-5 text-white/50"></i>
     </button>
   </div>
