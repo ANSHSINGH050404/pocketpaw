@@ -254,6 +254,12 @@ window.PocketPaw.Channels = {
                             action === 'start' ? `${label} started!` : `${label} stopped.`,
                             action === 'start' ? 'success' : 'info'
                         );
+                        
+                        // Track checklist: channel connected
+                        if (action === 'start' && this.updateChecklistFromEvent) {
+                            this.updateChecklistFromEvent('channel_connected');
+                        }
+                        
                         await this.getChannelStatus();
 
                         // Start/stop QR polling for WhatsApp personal mode

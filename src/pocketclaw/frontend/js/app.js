@@ -209,6 +209,9 @@ function app() {
             this.$nextTick(() => {
                 if (window.refreshIcons) window.refreshIcons();
             });
+
+            // Initialize onboarding (checklist, wizard state)
+            this.initOnboarding();
         },
 
         /**
@@ -351,8 +354,16 @@ function app() {
             }
 
             // First-run welcome: show if no API key and not previously dismissed
+            // Note: initOnboarding() in init() will handle this more comprehensively
             if (!this.hasAnthropicKey && !localStorage.getItem('pocketpaw_setup_dismissed')) {
                 this.showWelcome = true;
+                this.setupStep = 1;
+            }
+
+            // Update checklist: API key status
+            if (this.hasAnthropicKey) {
+                this.checklistItems.apiKey.complete = true;
+                this.saveChecklist();
             }
         },
 
@@ -450,6 +461,9 @@ function app() {
 
             // Refresh settings from backend to confirm key was persisted
             setTimeout(() => socket.send('get_settings'), 500);
+
+            // Track checklist completion
+            this.updateChecklistFromEvent('api_key_saved');
         },
 
         /**

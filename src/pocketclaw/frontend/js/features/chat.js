@@ -193,12 +193,22 @@ window.PocketPaw.Chat = {
                     // Run the skill
                     socket.send('run_skill', { name: skillName, args });
                     this.log(`Running skill: /${skillName} ${args}`, 'info');
+
+                    // Track checklist: skill used
+                    if (this.updateChecklistFromEvent) {
+                        this.updateChecklistFromEvent('skill_used');
+                    }
                     return;
                 }
 
                 // Add user message
                 this.addMessage('user', text);
                 this.inputText = '';
+
+                // Track checklist: first message
+                if (this.updateChecklistFromEvent) {
+                    this.updateChecklistFromEvent('message_sent');
+                }
 
                 // Start streaming indicator
                 this.startStreaming();

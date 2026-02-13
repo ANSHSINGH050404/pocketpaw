@@ -27,6 +27,44 @@
     class="messages flex-1 flex flex-col gap-2.5 overflow-y-auto p-4 md:p-8 pb-8 min-h-0"
     x-ref="messages"
   >
+    <!-- Empty State -->
+    <template x-if="messages.length === 0 && !isStreaming">
+      <div class="empty-state-chat">
+        <!-- Icon -->
+        <div class="empty-state-icon">🐾</div>
+        
+        <!-- Heading -->
+        <h3>Ready when you are</h3>
+        <p>PocketPaw can write code, analyze files, search the web, and more.</p>
+        
+        <!-- Sample Prompts -->
+        <div class="sample-prompts">
+          <div class="sample-prompts-label">Try asking:</div>
+          <template x-for="(prompt, index) in samplePrompts" :key="index">
+            <button 
+                class="prompt-chip"
+                @click="useSamplePrompt(prompt.text)"
+            >
+              <i :data-lucide="prompt.icon"></i>
+              <span x-text="prompt.text"></span>
+            </button>
+          </template>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+          <button @click="openSkills()">
+            <i data-lucide="wand-2" class="w-4 h-4"></i>
+            Browse Skills
+          </button>
+          <button @click="openSettings()">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            Configure
+          </button>
+        </div>
+      </div>
+    </template>
+
     <template x-for="(msg, index) in messages" :key="index">
       <!-- Message Item -->
       <div

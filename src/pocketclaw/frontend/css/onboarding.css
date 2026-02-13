@@ -1,0 +1,540 @@
+/* =====================================================
+   PocketPaw Onboarding Styles
+   Wizard, Checklist, Tour, and Empty States
+   ===================================================== */
+
+/* -----------------------------------------------------
+   Setup Wizard Styles
+   ----------------------------------------------------- */
+
+.wizard-modal {
+    animation: wizardPop 0.3s ease-out;
+}
+
+@keyframes wizardPop {
+    0% { 
+        opacity: 0; 
+        transform: scale(0.95) translateY(10px); 
+    }
+    100% { 
+        opacity: 1; 
+        transform: scale(1) translateY(0); 
+    }
+}
+
+.wizard-step-enter {
+    animation: slideInRight 0.3s ease-out;
+}
+
+.wizard-step-exit {
+    animation: slideOutLeft 0.2s ease-in;
+}
+
+@keyframes slideInRight {
+    from { 
+        opacity: 0; 
+        transform: translateX(30px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateX(0); 
+    }
+}
+
+@keyframes slideOutLeft {
+    from { 
+        opacity: 1; 
+        transform: translateX(0); 
+    }
+    to { 
+        opacity: 0; 
+        transform: translateX(-30px); 
+    }
+}
+
+/* Progress bar animation */
+.wizard-progress {
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Step indicator pulse */
+.wizard-step-active {
+    animation: stepPulse 2s ease-in-out infinite;
+}
+
+@keyframes stepPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Connection test spinner */
+.test-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Orbit animation for test indicator */
+.orbit-dot {
+    animation: orbit 2s linear infinite;
+}
+
+@keyframes orbit {
+    from { transform: rotate(0deg) translateX(20px) rotate(0deg); }
+    to { transform: rotate(360deg) translateX(20px) rotate(-360deg); }
+}
+
+/* Success check animation */
+.success-check {
+    animation: checkPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes checkPop {
+    0% { 
+        opacity: 0; 
+        transform: scale(0) rotate(-45deg); 
+    }
+    50% { 
+        transform: scale(1.2) rotate(0deg); 
+    }
+    100% { 
+        opacity: 1; 
+        transform: scale(1) rotate(0deg); 
+    }
+}
+
+/* Preset card hover effect */
+.preset-card {
+    transition: all 0.2s ease;
+}
+
+.preset-card:hover {
+    transform: translateY(-1px);
+}
+
+.preset-card.selected {
+    box-shadow: 0 0 30px rgba(10, 132, 255, 0.15);
+}
+
+/* -----------------------------------------------------
+   Getting Started Checklist
+   ----------------------------------------------------- */
+
+.setup-checklist {
+    background: linear-gradient(135deg, rgba(10, 132, 255, 0.08) 0%, rgba(10, 132, 255, 0.02) 100%);
+    border: 1px solid rgba(10, 132, 255, 0.15);
+    border-radius: 14px;
+    margin: 0 12px 12px 12px;
+    overflow: hidden;
+}
+
+.checklist-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.checklist-header span {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.checklist-header button {
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.checklist-header button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.checklist-progress-bar {
+    height: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 12px 8px 12px;
+    border-radius: 1px;
+    overflow: hidden;
+}
+
+.checklist-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0A84FF 0%, #30D158 100%);
+    border-radius: 1px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checklist-items {
+    padding: 4px 8px 8px 8px;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.checklist-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.checklist-item i {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+}
+
+.checklist-item span {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.2s ease;
+}
+
+.checklist-item.complete i {
+    color: #30D158;
+}
+
+.checklist-item.complete span {
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: line-through;
+}
+
+.checklist-dismiss-btn {
+    width: calc(100% - 16px);
+    margin: 0 8px 8px 8px;
+    padding: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.checklist-dismiss-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* -----------------------------------------------------
+   Empty State Styles
+   ----------------------------------------------------- */
+
+.empty-state-chat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    animation: gentleBounce 2s ease-in-out infinite;
+}
+
+@keyframes gentleBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.empty-state-chat h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 8px;
+}
+
+.empty-state-chat p {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.sample-prompts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 24px;
+}
+
+.sample-prompts-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.prompt-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.prompt-chip:hover {
+    background: rgba(10, 132, 255, 0.1);
+    border-color: rgba(10, 132, 255, 0.3);
+    transform: translateX(4px);
+}
+
+.prompt-chip i {
+    width: 16px;
+    height: 16px;
+    color: rgba(10, 132, 255, 0.8);
+    flex-shrink: 0;
+}
+
+.quick-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.quick-actions button {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.quick-actions button:first-child {
+    background: rgba(10, 132, 255, 0.15);
+    color: #0A84FF;
+    border: 1px solid rgba(10, 132, 255, 0.3);
+}
+
+.quick-actions button:first-child:hover {
+    background: rgba(10, 132, 255, 0.25);
+}
+
+.quick-actions button:last-child {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quick-actions button:last-child:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* -----------------------------------------------------
+   Tour Highlight Styles
+   ----------------------------------------------------- */
+
+.tour-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 200;
+    backdrop-filter: blur(2px);
+}
+
+.tour-highlight {
+    position: relative;
+    z-index: 201;
+    box-shadow: 
+        0 0 0 4px rgba(10, 132, 255, 0.5),
+        0 0 0 9999px rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    animation: highlightPulse 2s ease-in-out infinite;
+}
+
+@keyframes highlightPulse {
+    0%, 100% { 
+        box-shadow: 
+            0 0 0 4px rgba(10, 132, 255, 0.5),
+            0 0 0 9999px rgba(0, 0, 0, 0.7);
+    }
+    50% { 
+        box-shadow: 
+            0 0 0 6px rgba(10, 132, 255, 0.7),
+            0 0 20px 6px rgba(10, 132, 255, 0.3),
+            0 0 0 9999px rgba(0, 0, 0, 0.7);
+    }
+}
+
+.tour-tooltip {
+    position: absolute;
+    z-index: 202;
+    background: rgba(35, 35, 37, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 16px;
+    max-width: 280px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    animation: tooltipPop 0.3s ease-out;
+}
+
+@keyframes tooltipPop {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.tour-tooltip h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 6px;
+}
+
+.tour-tooltip p {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.4;
+    margin-bottom: 12px;
+}
+
+.tour-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tour-step-indicator {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.tour-actions button {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.tour-actions .tour-skip {
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+}
+
+.tour-actions .tour-skip:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tour-actions .tour-next {
+    background: #0A84FF;
+    color: white;
+}
+
+.tour-actions .tour-next:hover {
+    background: #0077ED;
+}
+
+/* -----------------------------------------------------
+   Confetti Animation for Completion
+   ----------------------------------------------------- */
+
+.confetti {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+    z-index: 300;
+}
+
+.confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    animation: confettiFall 3s ease-out forwards;
+}
+
+@keyframes confettiFall {
+    0% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(300px) rotate(720deg);
+    }
+}
+
+/* -----------------------------------------------------
+   Responsive Adjustments
+   ----------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .setup-checklist {
+        margin: 0 8px 8px 8px;
+        border-radius: 12px;
+    }
+    
+    .checklist-header {
+        padding: 8px 10px;
+    }
+    
+    .checklist-items {
+        padding: 4px 6px 6px 6px;
+    }
+    
+    .checklist-item {
+        padding: 5px 6px;
+    }
+    
+    .empty-state-chat {
+        padding: 32px 16px;
+    }
+    
+    .empty-state-icon {
+        font-size: 40px;
+    }
+    
+    .sample-prompts {
+        gap: 6px;
+    }
+    
+    .prompt-chip {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+    
+    .quick-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .quick-actions button {
+        width: 100%;
+    }
+}

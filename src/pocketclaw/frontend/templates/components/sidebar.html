@@ -28,6 +28,98 @@
     </button>
   </div>
 
+  <!-- Getting Started Checklist -->
+  <div 
+      x-show="!checklistDismissed && !isChecklistComplete"
+      x-transition
+      class="setup-checklist mb-3 shrink-0"
+  >
+    <!-- Header -->
+    <div class="checklist-header">
+      <div class="flex items-center gap-2">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-accent"></i>
+        <span>Getting Started</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="text-[10px] text-white/40" x-text="checklistProgress + '%'"></span>
+        <button 
+            @click="checklistMinimized = !checklistMinimized"
+            class="p-1 rounded hover:bg-white/10 transition-colors"
+        >
+          <i 
+              :data-lucide="checklistMinimized ? 'chevron-down' : 'chevron-up'"
+              class="w-3.5 h-3.5 text-white/40"
+          ></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="checklist-progress-bar">
+      <div 
+          class="checklist-progress-fill"
+          :style="'width: ' + checklistProgress + '%'"
+      ></div>
+    </div>
+
+    <!-- Checklist Items -->
+    <div x-show="!checklistMinimized" x-collapse class="checklist-items">
+      <!-- API Key -->
+      <div 
+          class="checklist-item"
+          :class="{ 'complete': checklistItems.apiKey.complete }"
+          @click="!checklistItems.apiKey.complete ? openSettings() : null"
+      >
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span x-text="checklistItems.apiKey.label"></span>
+        <i 
+            x-show="!checklistItems.apiKey.complete"
+            data-lucide="arrow-right" 
+            class="w-3 h-3 ml-auto text-accent opacity-0 group-hover:opacity-100"
+        ></i>
+      </div>
+
+      <!-- First Message -->
+      <div 
+          class="checklist-item"
+          :class="{ 'complete': checklistItems.firstMessage.complete }"
+          @click="!checklistItems.firstMessage.complete ? (view = 'chat') : null"
+      >
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span x-text="checklistItems.firstMessage.label"></span>
+      </div>
+
+      <!-- Use Skill -->
+      <div 
+          class="checklist-item"
+          :class="{ 'complete': checklistItems.useSkill.complete }"
+          @click="!checklistItems.useSkill.complete ? openSkills() : null"
+      >
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span x-text="checklistItems.useSkill.label"></span>
+      </div>
+
+      <!-- Setup Channel -->
+      <div 
+          class="checklist-item"
+          :class="{ 'complete': checklistItems.setupChannel.complete }"
+          @click="!checklistItems.setupChannel.complete ? openChannels() : null"
+      >
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span x-text="checklistItems.setupChannel.label"></span>
+      </div>
+    </div>
+
+    <!-- Dismiss Button (shown when all complete) -->
+    <button 
+        x-show="isChecklistComplete"
+        @click="dismissChecklist()"
+        class="checklist-dismiss-btn"
+    >
+      Dismiss
+    </button>
+  </div>
+
   <!-- Tab Switcher: Chats / Projects -->
   <div class="flex bg-white/5 rounded-lg p-0.5 mb-3 shrink-0 mx-1">
     <button

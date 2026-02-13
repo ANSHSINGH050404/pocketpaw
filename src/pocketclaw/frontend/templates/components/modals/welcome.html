@@ -1,64 +1,415 @@
 <!--
-  PocketPaw Dashboard - Welcome / First-Run Modal
+  PocketPaw Dashboard - Welcome / Setup Wizard Modal
 
-  Created: 2026-02-11
-  Shows on first load when no Anthropic API key is configured.
-  Offers quick API key setup or skip option.
+  Created: 2026-02-13
+  Multi-step onboarding wizard:
+  - Step 1: Welcome & API Key setup
+  - Step 2: Connection test
+  - Step 3: Quick-start presets
+
+  Previous: Single-field API key modal
 -->
-<!-- Welcome Modal -->
+<!-- Welcome/Setup Wizard Modal -->
 <div
-    class="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-md p-4"
+    class="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
     x-show="showWelcome"
     x-transition.opacity
-    @click.self="showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1')"
+    @keydown.escape.window="if (setupStep === 1) { showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1'); }"
 >
-<div class="w-full max-w-[460px] bg-[#1c1c1e]/95 backdrop-blur-xl border border-[var(--glass-border)] rounded-[20px] shadow-2xl animate-[modalPop_0.25s_ease-out] overflow-hidden" @click.stop>
+<div 
+    class="w-full max-w-[520px] bg-[#1c1c1e]/95 backdrop-blur-xl border border-[var(--glass-border)] rounded-[24px] shadow-2xl overflow-hidden"
+    x-data="{ showSkipConfirm: false }"
+    @click.stop
+>
 
-    <!-- Header -->
-    <div class="px-6 pt-6 pb-2 text-center">
-        <div class="text-4xl mb-3">&#x1F43E;</div>
-        <h2 class="text-[20px] font-bold text-white mb-1">Welcome to PocketPaw <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full align-middle leading-none">Beta</span></h2>
-        <p class="text-[13px] text-white/60 leading-relaxed">
-            Your self-hosted AI agent. To get started, add your Anthropic API key below.
-        </p>
-    </div>
-
-    <!-- API Key Input -->
-    <div class="px-6 py-4">
-        <div class="flex flex-col gap-1.5">
-            <div class="flex justify-between items-center">
-                <label class="text-[12px] font-medium text-[var(--text-secondary)] uppercase tracking-wide">Anthropic API Key</label>
-                <a href="https://console.anthropic.com/api-keys" target="_blank" rel="noopener" class="api-key-help">
-                    <i data-lucide="external-link" class="w-3 h-3"></i> Get Key
-                </a>
+    <!-- Progress Header -->
+    <div class="px-6 pt-6 pb-4 border-b border-white/5">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+                <i data-lucide="paw-print" class="w-5 h-5 text-accent"></i>
+                <span class="text-sm font-semibold text-white/80">PocketPaw Setup</span>
             </div>
-            <input
-                type="password"
-                x-model="apiKeys.anthropic"
-                placeholder="sk-ant-..."
-                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
-                @keydown.enter="if (apiKeys.anthropic) { saveApiKey('anthropic'); showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1'); }"
-            />
+            <span class="text-xs text-white/40 font-medium">
+                Step <span x-text="setupStep"></span> of <span x-text="setupTotalSteps"></span>
+            </span>
+        </div>
+        <!-- Progress Bar -->
+        <div class="h-1 bg-white/10 rounded-full overflow-hidden">
+            <div 
+                class="h-full bg-gradient-to-r from-accent to-accent/80 rounded-full transition-all duration-500 ease-out"
+                :style="`width: ${(setupStep / setupTotalSteps) * 100}%`"
+            ></div>
+        </div>
+        <!-- Step Indicators -->
+        <div class="flex justify-between mt-3">
+            <div class="flex items-center gap-1" :class="setupStep >= 1 ? 'text-accent' : 'text-white/30'">
+                <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                <span class="text-[10px] uppercase tracking-wider font-medium">API Key</span>
+            </div>
+            <div class="flex items-center gap-1" :class="setupStep >= 2 ? 'text-accent' : 'text-white/30'">
+                <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                <span class="text-[10px] uppercase tracking-wider font-medium">Test</span>
+            </div>
+            <div class="flex items-center gap-1" :class="setupStep >= 3 ? 'text-accent' : 'text-white/30'">
+                <i data-lucide="rocket" class="w-3.5 h-3.5"></i>
+                <span class="text-[10px] uppercase tracking-wider font-medium">Start</span>
+            </div>
         </div>
     </div>
 
-    <!-- Actions -->
-    <div class="px-6 pb-6 flex flex-col gap-2">
-        <button
-            class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white py-2.5 rounded-[10px] text-[13px] font-semibold transition-all active:scale-[0.98]"
-            :disabled="!apiKeys.anthropic"
-            :class="!apiKeys.anthropic ? 'opacity-50 cursor-not-allowed' : ''"
-            @click="saveApiKey('anthropic'); showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1')"
+    <!-- Step 1: Welcome & API Key -->
+    <div x-show="setupStep === 1" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-4" x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="px-6 py-6">
+            <!-- Hero -->
+            <div class="text-center mb-6">
+                <div class="text-5xl mb-3 animate-bounce">&#x1F43E;</div>
+                <h2 class="text-[22px] font-bold text-white mb-2">Welcome to PocketPaw</h2>
+                <p class="text-[13px] text-white/60 leading-relaxed max-w-[360px] mx-auto">
+                    Your self-hosted AI assistant. To get started, connect your Anthropic API key below.
+                </p>
+            </div>
+
+            <!-- Feature Pills -->
+            <div class="flex flex-wrap justify-center gap-2 mb-6">
+                <span class="px-2.5 py-1 bg-accent/10 border border-accent/20 rounded-full text-[11px] text-accent flex items-center gap-1">
+                    <i data-lucide="code" class="w-3 h-3"></i> Code
+                </span>
+                <span class="px-2.5 py-1 bg-success/10 border border-success/20 rounded-full text-[11px] text-success flex items-center gap-1">
+                    <i data-lucide="search" class="w-3 h-3"></i> Web Search
+                </span>
+                <span class="px-2.5 py-1 bg-warning/10 border border-warning/20 rounded-full text-[11px] text-warning flex items-center gap-1">
+                    <i data-lucide="folder" class="w-3 h-3"></i> File Management
+                </span>
+                <span class="px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full text-[11px] text-purple-400 flex items-center gap-1">
+                    <i data-lucide="zap" class="w-3 h-3"></i> Skills
+                </span>
+            </div>
+
+            <!-- API Key Input -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-[12px] font-semibold text-white/80 uppercase tracking-wide">Anthropic API Key</label>
+                    <a href="https://console.anthropic.com/api-keys" target="_blank" rel="noopener" class="api-key-help">
+                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                        Get your key
+                        <i data-lucide="arrow-right" class="w-3 h-3 animate-pulse"></i>
+                    </a>
+                </div>
+                <div class="relative">
+                    <input
+                        type="password"
+                        x-model="apiKeys.anthropic"
+                        placeholder="sk-ant-api03-..."
+                        class="w-full bg-black/40 border border-[var(--glass-border)] rounded-[12px] py-3 px-4 text-[14px] text-white focus:outline-none focus:border-accent focus:bg-black/50 focus:ring-2 focus:ring-accent/20 transition-all placeholder-white/30 font-mono"
+                        @keydown.enter="if (apiKeys.anthropic && apiKeys.anthropic.startsWith('sk-ant')) { saveApiKey('anthropic'); nextSetupStep(); }"
+                    />
+                    <!-- Validation indicator -->
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                        <i 
+                            data-lucide="check-circle"
+                            class="w-5 h-5 text-success transition-all duration-300"
+                            :class="apiKeys.anthropic && apiKeys.anthropic.startsWith('sk-ant') ? 'opacity-100 scale-100' : 'opacity-0 scale-90'"
+                        ></i>
+                    </div>
+                </div>
+                <p class="text-[11px] text-white/40">
+                    <i data-lucide="shield" class="w-3 h-3 inline mr-1"></i>
+                    Your key is stored securely on your local machine only.
+                </p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="px-6 pb-6">
+            <button
+                class="w-full bg-accent hover:bg-[var(--accent-hover)] text-white py-3 rounded-[12px] text-[14px] font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                :disabled="!apiKeys.anthropic || !apiKeys.anthropic.startsWith('sk-ant')"
+                :class="(!apiKeys.anthropic || !apiKeys.anthropic.startsWith('sk-ant')) ? 'opacity-50 cursor-not-allowed' : ''"
+                @click="saveApiKey('anthropic'); nextSetupStep();"
+            >
+                <span>Continue</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+            <button
+                class="w-full text-white/40 hover:text-white/70 py-3 text-[12px] transition-colors mt-2"
+                @click="showSkipConfirm = true"
+            >
+                Skip for now
+            </button>
+        </div>
+
+        <!-- Skip Confirmation -->
+        <div 
+            x-show="showSkipConfirm"
+            x-transition
+            class="absolute inset-0 bg-[#1c1c1e]/98 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center"
         >
-            Save &amp; Start
-        </button>
-        <button
-            class="w-full text-white/50 hover:text-white/80 py-2 text-[12px] transition-colors"
-            @click="showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1')"
-        >
-            Skip for now
-        </button>
+            <i data-lucide="alert-circle" class="w-12 h-12 text-warning mb-3"></i>
+            <h3 class="text-lg font-semibold text-white mb-2">Skip setup?</h3>
+            <p class="text-[13px] text-white/60 mb-6">
+                Without an API key, PocketPaw won't be able to respond to messages. You can add one later in Settings.
+            </p>
+            <div class="flex gap-3 w-full">
+                <button 
+                    class="flex-1 bg-white/10 hover:bg-white/15 text-white py-2.5 rounded-[10px] text-[13px] font-medium transition-colors"
+                    @click="showSkipConfirm = false"
+                >
+                    Go back
+                </button>
+                <button 
+                    class="flex-1 bg-white/5 hover:bg-white/10 text-white/60 py-2.5 rounded-[10px] text-[13px] transition-colors"
+                    @click="showWelcome = false; localStorage.setItem('pocketpaw_setup_dismissed', '1');"
+                >
+                    Skip anyway
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Connection Test -->
+    <div x-show="setupStep === 2" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-4" x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="px-6 py-6">
+            <div class="text-center mb-6">
+                <div class="relative inline-block mb-3">
+                    <div 
+                        class="w-16 h-16 rounded-full bg-accent/10 border-2 border-accent/30 flex items-center justify-center"
+                        :class="testResponseReceived ? 'bg-success/10 border-success/30' : ''"
+                    >
+                        <i 
+                            data-lucide="activity"
+                            class="w-8 h-8 text-accent"
+                            :class="isTestingConnection && !testResponseReceived ? 'animate-pulse' : ''"
+                            x-show="!testResponseReceived"
+                        ></i>
+                        <i 
+                            data-lucide="check-circle"
+                            class="w-8 h-8 text-success"
+                            x-show="testResponseReceived"
+                            x-transition
+                        ></i>
+                    </div>
+                    <!-- Orbiting dots animation -->
+                    <div x-show="isTestingConnection && !testResponseReceived" class="absolute inset-0">
+                        <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1 w-2 h-2 bg-accent rounded-full animate-ping"></div>
+                    </div>
+                </div>
+                <h2 class="text-[20px] font-bold text-white mb-2">
+                    <span x-show="!testResponseReceived">Testing connection...</span>
+                    <span x-show="testResponseReceived" x-transition>You're all set!</span>
+                </h2>
+                <p class="text-[13px] text-white/60">
+                    <span x-show="!testMessageSent">Preparing test message...</span>
+                    <span x-show="testMessageSent && !testResponseReceived">Waiting for response...</span>
+                    <span x-show="testResponseReceived">PocketPaw is responding correctly.</span>
+                </p>
+            </div>
+
+            <!-- Test Status List -->
+            <div class="space-y-2 mb-6">
+                <div class="flex items-center gap-3 p-3 bg-white/5 rounded-[10px] border border-white/5">
+                    <div class="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center">
+                        <i data-lucide="check" class="w-4 h-4 text-success"></i>
+                    </div>
+                    <span class="text-[13px] text-white/80 flex-1">API key saved</span>
+                </div>
+                <div 
+                    class="flex items-center gap-3 p-3 bg-white/5 rounded-[10px] border border-white/5 transition-all"
+                    :class="testMessageSent ? 'border-success/20' : ''"
+                >
+                    <div 
+                        class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                        :class="testMessageSent ? 'bg-success/20' : 'bg-white/10'"
+                    >
+                        <i 
+                            data-lucide="check"
+                            class="w-4 h-4 text-success"
+                            x-show="testMessageSent"
+                        ></i>
+                        <div x-show="!testMessageSent" class="w-3 h-3 border-2 border-white/30 border-t-accent rounded-full animate-spin"></div>
+                    </div>
+                    <span class="text-[13px] text-white/80 flex-1">Test message sent</span>
+                </div>
+                <div 
+                    class="flex items-center gap-3 p-3 bg-white/5 rounded-[10px] border border-white/5 transition-all"
+                    :class="testResponseReceived ? 'border-success/20' : ''"
+                >
+                    <div 
+                        class="w-6 h-6 rounded-full flex items-center justify-center transition-all"
+                        :class="testResponseReceived ? 'bg-success/20' : 'bg-white/10'"
+                    >
+                        <i 
+                            data-lucide="check"
+                            class="w-4 h-4 text-success"
+                            x-show="testResponseReceived"
+                        ></i>
+                        <div x-show="!testResponseReceived" class="w-3 h-3 border-2 border-white/30 border-t-accent rounded-full animate-spin"></div>
+                    </div>
+                    <span class="text-[13px] text-white/80 flex-1">Response received</span>
+                </div>
+            </div>
+
+            <!-- Preview of what PocketPaw can do -->
+            <div x-show="testResponseReceived" x-transition class="bg-gradient-to-br from-accent/10 to-purple-500/10 rounded-[12px] p-4 border border-accent/20">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-accent mt-0.5"></i>
+                    <div>
+                        <p class="text-[13px] text-white/90 font-medium mb-1">What happens next?</p>
+                        <p class="text-[12px] text-white/60">
+                            You can chat with PocketPaw, use skills with <code class="bg-white/10 px-1.5 py-0.5 rounded text-[11px]">/command</code>, connect messaging channels, and more.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="px-6 pb-6">
+            <button
+                class="w-full bg-accent hover:bg-[var(--accent-hover)] text-white py-3 rounded-[12px] text-[14px] font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                :disabled="!testResponseReceived"
+                :class="!testResponseReceived ? 'opacity-50 cursor-not-allowed' : ''"
+                @click="nextSetupStep()"
+            >
+                <span>Continue</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+            <button
+                class="w-full text-white/40 hover:text-white/70 py-2 text-[12px] transition-colors mt-2"
+                @click="prevSetupStep()"
+                :disabled="isTestingConnection"
+            >
+                Back
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 3: Quick Start Presets -->
+    <div x-show="setupStep === 3" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-4" x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="px-6 py-6">
+            <div class="text-center mb-6">
+                <h2 class="text-[22px] font-bold text-white mb-2">How will you use PocketPaw?</h2>
+                <p class="text-[13px] text-white/60">
+                    Choose a preset to get started with sample prompts tailored to your needs.
+                </p>
+            </div>
+
+            <!-- Preset Cards -->
+            <div class="space-y-3 mb-6">
+                <template x-for="preset in presets" :key="preset.id">
+                    <button
+                        class="w-full p-4 rounded-[14px] border-2 text-left transition-all group"
+                        :class="selectedPreset === preset.id 
+                            ? 'bg-accent/10 border-accent shadow-[0_0_20px_rgba(10,132,255,0.15)]' 
+                            : 'bg-white/5 border-transparent hover:border-white/10 hover:bg-white/8'"
+                        @click="selectPreset(preset.id)"
+                    >
+                        <div class="flex items-start gap-4">
+                            <div 
+                                class="w-12 h-12 rounded-[12px] flex items-center justify-center shrink-0 transition-colors"
+                                :class="selectedPreset === preset.id ? 'bg-accent/20' : 'bg-white/10'"
+                            >
+                                <i 
+                                    :data-lucide="preset.icon"
+                                    class="w-6 h-6"
+                                    :class="selectedPreset === preset.id ? 'text-accent' : 'text-white/60'"
+                                ></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3 
+                                        class="font-semibold text-[15px]"
+                                        :class="selectedPreset === preset.id ? 'text-white' : 'text-white/90'"
+                                        x-text="preset.title"
+                                    ></h3>
+                                    <i 
+                                        data-lucide="check-circle"
+                                        class="w-4 h-4 text-accent"
+                                        x-show="selectedPreset === preset.id"
+                                    ></i>
+                                </div>
+                                <p class="text-[12px] text-white/50" x-text="preset.description"></p>
+                            </div>
+                        </div>
+                        <!-- Sample prompts preview -->
+                        <div x-show="selectedPreset === preset.id" x-transition class="mt-3 pt-3 border-t border-white/10">
+                            <p class="text-[10px] uppercase tracking-wider text-white/40 mb-2">Sample prompts included:</p>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="(prompt, idx) in preset.samplePrompts.slice(0, 2)" :key="idx">
+                                    <span class="text-[11px] text-white/60 bg-white/5 px-2 py-1 rounded truncate max-w-[200px]" x-text="prompt"></span>
+                                </template>
+                                <span x-show="preset.samplePrompts.length > 2" class="text-[11px] text-white/40 px-2 py-1">+<span x-text="preset.samplePrompts.length - 2"></span> more</span>
+                            </div>
+                        </div>
+                    </button>
+                </template>
+
+                <!-- Start Fresh Option -->
+                <button
+                    class="w-full p-4 rounded-[14px] border-2 text-left transition-all group"
+                    :class="selectedPreset === null 
+                        ? 'bg-white/10 border-white/20' 
+                        : 'bg-white/5 border-transparent hover:border-white/10 hover:bg-white/8'"
+                    @click="selectedPreset = null"
+                >
+                    <div class="flex items-center gap-4">
+                        <div 
+                            class="w-12 h-12 rounded-[12px] flex items-center justify-center shrink-0"
+                            :class="selectedPreset === null ? 'bg-white/20' : 'bg-white/10'"
+                        >
+                            <i 
+                                data-lucide="sparkles"
+                                class="w-6 h-6"
+                                :class="selectedPreset === null ? 'text-white' : 'text-white/60'"
+                            ></i>
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-semibold text-[15px] text-white/90">Start Fresh</h3>
+                                <i data-lucide="check-circle" class="w-4 h-4 text-white" x-show="selectedPreset === null"></i>
+                            </div>
+                            <p class="text-[12px] text-white/50">No preset — customize as you go</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="px-6 pb-6">
+            <button
+                class="w-full bg-accent hover:bg-[var(--accent-hover)] text-white py-3 rounded-[12px] text-[14px] font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                @click="applyPresetAndClose()"
+            >
+                <span>Get Started</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+            <button
+                class="w-full text-white/40 hover:text-white/70 py-2 text-[12px] transition-colors mt-2"
+                @click="skipPresets()"
+            >
+                Skip this step
+            </button>
+        </div>
     </div>
 
 </div>
 </div>
+
+<style>
+/* Wizard animations */
+@keyframes wizardSlideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* API Key validation shake on error */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+    animation: shake 0.4s ease-in-out;
+}
+</style>
