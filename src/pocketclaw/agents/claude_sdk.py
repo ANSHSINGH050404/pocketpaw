@@ -25,6 +25,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
+from pocketclaw.agents.errors import format_error_for_user
 from pocketclaw.agents.protocol import AgentEvent, ExecutorProtocol
 from pocketclaw.config import Settings
 from pocketclaw.tools.policy import ToolPolicy
@@ -710,28 +711,8 @@ class ClaudeAgentSDK:
             error_msg = str(e)
             logger.error(f"Claude Agent SDK error: {error_msg}")
 
-            # Provide helpful error messages
-            if "CLINotFoundError" in error_msg or "not found" in error_msg.lower():
-                yield AgentEvent(
-                    type="error",
-                    content=(
-                        "❌ Claude Code CLI not found.\n\n"
-                        "Install with: npm install -g @anthropic-ai/claude-code\n\n"
-                        "Or switch to a different backend in "
-                        "**Settings → General**."
-                    ),
-                )
-            elif "API key" in error_msg.lower() or "authentication" in error_msg.lower():
-                yield AgentEvent(
-                    type="error",
-                    content=(
-                        "❌ Anthropic API key not configured.\n\n"
-                        "Open **Settings → API Keys** in the sidebar "
-                        "to add your key."
-                    ),
-                )
-            else:
-                yield AgentEvent(type="error", content=f"❌ Agent error: {error_msg}")
+            friendly_msg = format_error_for_user(e, "claude_sdk")
+            yield AgentEvent(type="error", content=friendly_msg)
 
     async def stop(self) -> None:
         """Stop the agent execution."""
