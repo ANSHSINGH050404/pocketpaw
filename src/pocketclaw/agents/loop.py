@@ -17,6 +17,7 @@ It replaces the old highly-coupled bot loops.
 import asyncio
 import logging
 
+from pocketclaw.agents.errors import format_error_for_user
 from pocketclaw.agents.router import AgentRouter
 from pocketclaw.bootstrap import AgentContextBuilder
 from pocketclaw.bus import InboundMessage, OutboundMessage, SystemEvent, get_message_bus
@@ -400,7 +401,7 @@ class AgentLoop:
                     self.settings.memory_backend == "mem0" and self.settings.mem0_auto_learn
                 ) or (self.settings.memory_backend == "file" and self.settings.file_auto_learn)
                 if should_auto_learn:
-                    asyncio.create_task(
+                    t = asyncio.create_task(
                         self._auto_learn(
                             message.content,
                             full_response,
@@ -413,28 +414,18 @@ class AgentLoop:
 
         except TimeoutError:
             logger.error("Agent backend timed out")
-            # Kill the hung backend so it releases resources
             try:
                 await router.stop()
             except Exception:
                 pass
-            # Force router re-init on next message
             self._router = None
 
+            friendly = format_error_for_user(TimeoutError("Agent request timed out"), "claude_sdk")
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=message.channel,
                     chat_id=message.chat_id,
-                    content=(
-                        "Request timed out — the agent backend didn't respond.\n\n"
-                        "**Possible causes:**\n"
-                        "- Claude Code CLI is not installed "
-                        "(`npm install -g @anthropic-ai/claude-code`)\n"
-                        "- API key is missing or invalid "
-                        "(check Settings → API Keys)\n"
-                        "- Try switching to **PocketPaw Native** backend "
-                        "in Settings → General"
-                    ),
+                    content=friendly,
                     is_stream_chunk=True,
                 )
             )
@@ -448,17 +439,17 @@ class AgentLoop:
             )
         except Exception as e:
             logger.exception(f"❌ Error processing message: {e}")
-            # Kill the backend on error
             try:
                 await router.stop()
             except Exception:
                 pass
 
+            friendly = format_error_for_user(e, "claude_sdk")
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=message.channel,
                     chat_id=message.chat_id,
-                    content=f"An error occurred: {str(e)}",
+                    content=friendly,
                 )
             )
             await self.bus.publish_outbound(

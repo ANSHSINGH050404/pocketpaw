@@ -1,7 +1,8 @@
 """
 PocketPaw Native Orchestrator - The Brain.
 
-Your own orchestrator using raw Anthropic SDK + Open Interpreter as executor.
+Your own orchestrator using raw LLM SDK + Open Interpreter as executor.
+Supports Anthropic, Gemini, and other providers.
 No LangChain, no Agent SDK - just simple, transparent control.
 
 Created: 2026-02-02
@@ -16,21 +17,71 @@ Changes:
   - 2026-02-02: SPEED FIX - Shell commands now use direct subprocess (10x faster).
                 'computer' tool uses OI for complex multi-step tasks only.
   - 2026-02-05: Added 'remember' and 'recall' tools for long-term memory.
+  - 2026-02-13: Added Gemini provider support with full tool calling.
 """
 
 import asyncio
 import logging
 import re
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import AsyncIterator, Optional
+from typing import Any
 
-from anthropic import AsyncAnthropic
-
-from pocketclaw.config import Settings
+from pocketclaw.agents.errors import format_error_for_user
 from pocketclaw.agents.protocol import AgentEvent
+from pocketclaw.config import Settings
 from pocketclaw.tools.policy import ToolPolicy
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# LLM PROVIDER ABSTRACTION
+# =============================================================================
+
+@dataclass
+class ProviderEvent:
+    """Event from an LLM provider."""
+
+    type: str  # "text", "tool_call", "done", "error"
+    content: Any = None
+    metadata: dict = field(default_factory=dict)
+
+
+class LLMProvider(ABC):
+    """Abstract base class for LLM providers."""
+
+    @abstractmethod
+    def generate(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        system_prompt: str,
+    ) -> AsyncIterator[ProviderEvent]:
+        """Generate a response from the LLM.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            tools: List of tool definitions
+            system_prompt: System prompt string
+
+        Yields:
+            ProviderEvent objects
+        """
+        ...
+
+    @abstractmethod
+    def get_model_name(self) -> str:
+        """Get the name of the model being used."""
+        ...
+
+    @property
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if the provider is properly initialized and available."""
+        ...
 
 
 # =============================================================================
@@ -307,6 +358,271 @@ ALWAYS instruct it to RETURN data as text, not open GUI apps.""",
 ]
 
 
+# =============================================================================
+# ANTHROPIC PROVIDER
+# =============================================================================
+
+class AnthropicProvider(LLMProvider):
+    """Anthropic Claude provider implementation."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self._client: Any = None
+        self._initialize()
+
+    def _initialize(self) -> None:
+        """Initialize the Anthropic client."""
+        if not self.settings.anthropic_api_key:
+            logger.error("❌ Anthropic API key required")
+            return
+
+        try:
+            from anthropic import AsyncAnthropic
+
+            self._client = AsyncAnthropic(
+                api_key=self.settings.anthropic_api_key,
+                timeout=60.0,
+                max_retries=2,
+            )
+            logger.info("✅ Anthropic client initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Anthropic client: {e}")
+            self._client = None
+
+    @property
+    def is_available(self) -> bool:
+        return self._client is not None
+
+    def get_model_name(self) -> str:
+        return self.settings.anthropic_model
+
+    async def generate(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        system_prompt: str,
+    ) -> AsyncIterator[ProviderEvent]:
+        """Generate a response using Anthropic Claude."""
+        if not self._client:
+            yield ProviderEvent(type="error", content="Anthropic client not initialized")
+            return
+
+        try:
+            # Convert internal tool format to Anthropic format
+            anthropic_tools = []
+            for tool in tools:
+                anthropic_tools.append({
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "input_schema": tool.get("parameters") or tool.get("input_schema", {}),
+                })
+
+            # Call Anthropic API with timeout
+            response = await asyncio.wait_for(
+                self._client.messages.create(
+                    model=self.settings.anthropic_model,
+                    max_tokens=4096,
+                    system=system_prompt,
+                    tools=anthropic_tools,
+                    messages=messages,  # type: ignore[arg-type]
+                ),
+                timeout=90.0,
+            )
+
+            # Process response content blocks
+            for block in response.content:
+                if block.type == "text":
+                    if block.text:
+                        yield ProviderEvent(type="text", content=block.text)
+                elif block.type == "tool_use":
+                    yield ProviderEvent(
+                        type="tool_call",
+                        content={"name": block.name, "input": block.input, "id": block.id},
+                    )
+
+            yield ProviderEvent(type="done", content="")
+
+        except TimeoutError:
+            yield ProviderEvent(type="error", content="Request timed out after 90 seconds")
+        except Exception as e:
+            logger.error(f"Anthropic API error: {e}")
+            friendly = format_error_for_user(e, "pocketpaw_native")
+            yield ProviderEvent(type="error", content=friendly)
+
+
+# =============================================================================
+# GEMINI PROVIDER
+# =============================================================================
+
+class GeminiProvider(LLMProvider):
+    """Google Gemini provider implementation."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self._client: Any = None
+        self._initialize()
+
+    def _initialize(self) -> None:
+        """Initialize the Gemini client."""
+        if not self.settings.gemini_api_key:
+            logger.error("❌ Gemini API key required")
+            return
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            self._client = genai.Client(api_key=self.settings.gemini_api_key)
+            self._types = types
+            logger.info("✅ Gemini client initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Gemini client: {e}")
+            self._client = None
+
+    @property
+    def is_available(self) -> bool:
+        return self._client is not None
+
+    def get_model_name(self) -> str:
+        return self.settings.gemini_model
+
+    def _convert_tools_to_gemini(self, tools: list[dict]) -> list[Any]:
+        """Convert internal tool format to Gemini FunctionDeclaration format."""
+        if not self._client:
+            return []
+
+        gemini_tools = []
+        for tool in tools:
+            func_decl = self._types.FunctionDeclaration(
+                name=tool["name"],
+                description=tool["description"],
+                parameters=tool.get("parameters") or tool.get("input_schema", {}),
+            )
+            gemini_tools.append(self._types.Tool(function_declarations=[func_decl]))
+        return gemini_tools
+
+    def _convert_messages_to_gemini(self, messages: list[dict]) -> list[Any]:
+        """Convert internal message format to Gemini Content format."""
+        if not self._client:
+            return []
+
+        gemini_messages = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", [])
+
+            # Map roles: anthropic "assistant" -> gemini "model"
+            gemini_role = "model" if role == "assistant" else role
+
+            parts = []
+            if isinstance(content, str):
+                parts.append(self._types.Part(text=content))
+            elif isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict):
+                        if item.get("type") == "text":
+                            parts.append(self._types.Part(text=item.get("text", "")))
+                        elif item.get("type") == "tool_use":
+                            # Tool call from assistant
+                            parts.append(
+                                self._types.Part(
+                                    function_call=self._types.FunctionCall(
+                                        name=item.get("name", ""),
+                                        args=item.get("input", {}),
+                                    )
+                                )
+                            )
+                        elif item.get("type") == "tool_result":
+                            # Tool result from user
+                            parts.append(
+                                self._types.Part(
+                                    function_response=self._types.FunctionResponse(
+                                        name=item.get("name", ""),
+                                        response={"result": item.get("content", "")},
+                                    )
+                                )
+                            )
+
+            if parts:
+                gemini_messages.append(self._types.Content(role=gemini_role, parts=parts))
+
+        return gemini_messages
+
+    async def generate(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        system_prompt: str,
+    ) -> AsyncIterator[ProviderEvent]:
+        """Generate a response using Google Gemini."""
+        if not self._client:
+            yield ProviderEvent(type="error", content="Gemini client not initialized")
+            return
+
+        try:
+            # Convert tools and messages to Gemini format
+            gemini_tools = self._convert_tools_to_gemini(tools)
+            gemini_messages = self._convert_messages_to_gemini(messages)
+
+            # Create config with system instruction and tools
+            config = self._types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                tools=gemini_tools if gemini_tools else None,
+                max_output_tokens=4096,
+            )
+
+            # Call Gemini API with streaming
+            model_name = f"models/{self.settings.gemini_model}"
+
+            # Stream the response
+            stream = await self._client.aio.models.generate_content_stream(
+                model=model_name,
+                contents=gemini_messages,
+                config=config,
+            )
+
+            # Track if we received any tool calls
+            tool_calls = []
+            text_content = ""
+
+            async for chunk in stream:
+                if not chunk.candidates:
+                    continue
+
+                candidate = chunk.candidates[0]
+                if not candidate.content or not candidate.content.parts:
+                    continue
+
+                for part in candidate.content.parts:
+                    # Handle text
+                    if part.text:
+                        text_content += part.text
+                        yield ProviderEvent(type="text", content=part.text)
+
+                    # Handle function calls (tool calls)
+                    if part.function_call:
+                        tool_calls.append(part.function_call)
+                        yield ProviderEvent(
+                            type="tool_call",
+                            content={
+                                "name": part.function_call.name,
+                                "input": dict(part.function_call.args) if part.function_call.args else {},
+                                "id": f"call_{len(tool_calls)}",
+                            },
+                        )
+
+            yield ProviderEvent(type="done", content="")
+
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
+            friendly = format_error_for_user(e, "pocketpaw_native")
+            yield ProviderEvent(type="error", content=friendly)
+
+
+# =============================================================================
+# POCKETPAW ORCHESTRATOR
+# =============================================================================
+
 class PocketPawOrchestrator:
     """PocketPaw Native Orchestrator - Your own AI brain.
 
@@ -327,8 +643,8 @@ class PocketPawOrchestrator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self._client: Optional[AsyncAnthropic] = None
-        self._executor = None
+        self._provider: LLMProvider | None = None
+        self._executor: Any = None
         self._stop_flag = False
         self._file_jail = settings.file_jail_path.resolve()
         self._policy = ToolPolicy(
@@ -339,22 +655,25 @@ class PocketPawOrchestrator:
         self._initialize()
 
     def _initialize(self) -> None:
-        """Initialize the orchestrator."""
-        # Initialize Anthropic client
-        if not self.settings.anthropic_api_key:
-            logger.error("❌ Anthropic API key required for PocketPaw Native")
-            return
+        """Initialize the orchestrator with the appropriate LLM provider."""
+        # Select provider based on settings
+        provider_name = self.settings.llm_provider.lower()
 
-        # Initialize client with timeout to prevent hanging
-        try:
-            self._client = AsyncAnthropic(
-                api_key=self.settings.anthropic_api_key,
-                timeout=60.0,  # 60 second timeout for API requests
-                max_retries=2,  # Limit retries to prevent long hangs
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize Anthropic client: {e}")
-            self._client = None
+        if provider_name == "gemini":
+            self._provider = GeminiProvider(self.settings)
+            provider_display = "Google Gemini"
+        elif provider_name in ("anthropic", "auto"):
+            self._provider = AnthropicProvider(self.settings)
+            provider_display = "Anthropic Claude"
+        else:
+            # Default to Anthropic for unknown providers
+            logger.warning(f"Unknown provider '{provider_name}', defaulting to Anthropic")
+            self._provider = AnthropicProvider(self.settings)
+            provider_display = "Anthropic Claude (default)"
+
+        # Check if provider initialized successfully
+        if not self._provider or not self._provider.is_available:
+            logger.error(f"❌ Failed to initialize {provider_display} provider")
             return
 
         # Initialize executor (Open Interpreter)
@@ -368,9 +687,9 @@ class PocketPawOrchestrator:
 
         logger.info("=" * 50)
         logger.info("🐾 POCKETPAW NATIVE ORCHESTRATOR")
-        logger.info("   └─ Brain: Anthropic API (direct)")
+        logger.info("   └─ Brain: %s", provider_display)
         logger.info("   └─ Hands: Open Interpreter")
-        logger.info("   └─ Model: %s", self.settings.anthropic_model)
+        logger.info("   └─ Model: %s", self._provider.get_model_name())
         logger.info("   └─ File Jail: %s", self._file_jail)
         logger.info("   └─ Tool Profile: %s", self.settings.tool_profile)
         logger.info("   └─ Security: Enabled (patterns, paths, redaction)")
@@ -378,7 +697,11 @@ class PocketPawOrchestrator:
 
     def _get_filtered_tools(self) -> list[dict]:
         """Return TOOLS filtered by the active tool policy, plus MCP tools."""
-        base = [t for t in TOOLS if self._policy.is_tool_allowed(t["name"])]
+        base: list[dict] = []
+        for tool in TOOLS:
+            tool_name = tool.get("name", "")
+            if isinstance(tool_name, str) and self._policy.is_tool_allowed(tool_name):
+                base.append(tool)
         base.extend(self._get_mcp_tools())
         return base
 
@@ -422,7 +745,7 @@ class PocketPawOrchestrator:
     # SECURITY METHODS
     # =========================================================================
 
-    def _is_dangerous_command(self, command: str) -> Optional[str]:
+    def _is_dangerous_command(self, command: str) -> str | None:
         """Check if a command matches dangerous patterns using regex."""
         for pattern in DANGEROUS_PATTERNS:
             if re.search(pattern, command, re.IGNORECASE):
@@ -574,7 +897,7 @@ class PocketPawOrchestrator:
                 if self._executor:
                     content = await self._executor.read_file(path)
                 else:
-                    with open(Path(path).expanduser(), "r") as f:
+                    with open(Path(path).expanduser()) as f:
                         content = f.read()
 
                 # Security: redact secrets from file content
@@ -700,9 +1023,9 @@ class PocketPawOrchestrator:
         """Process a message through the orchestrator.
 
         This is the main agentic loop:
-        1. Send message to Claude with tools
-        2. If Claude responds with text → yield it
-        3. If Claude wants to use a tool → execute it → feed result back
+        1. Send message to LLM with tools
+        2. If LLM responds with text → yield it
+        3. If LLM wants to use a tool → execute it → feed result back
         4. Repeat until done
 
         Args:
@@ -711,9 +1034,9 @@ class PocketPawOrchestrator:
             history: Recent session history as {"role", "content"} dicts.
                 Prepended to the messages list for multi-turn context.
         """
-        if not self._client:
+        if not self._provider or not self._provider.is_available:
             yield AgentEvent(
-                type="error", content="❌ PocketPaw not initialized. Check Anthropic API key."
+                type="error", content="❌ PocketPaw not initialized. Check API key and settings."
             )
             return
 
@@ -722,7 +1045,7 @@ class PocketPawOrchestrator:
         # Conversation history for this request
         messages: list[dict] = []
 
-        # Prepend session history for multi-turn context (Anthropic API supports this natively)
+        # Prepend session history for multi-turn context
         if history:
             for msg in history:
                 role = msg.get("role", "user")
@@ -741,109 +1064,110 @@ class PocketPawOrchestrator:
                 iteration += 1
                 logger.debug(f"Iteration {iteration}/{max_iterations}")
 
-                # Smart model routing (opt-in)
-                model = self.settings.anthropic_model
-                if self.settings.smart_routing_enabled:
-                    from pocketclaw.agents.model_router import ModelRouter
-
-                    model_router = ModelRouter(self.settings)
-                    selection = model_router.classify(message)
-                    model = selection.model
-                    logger.info(
-                        "Smart routing: %s -> %s (%s)",
-                        selection.complexity.value,
-                        selection.model,
-                        selection.reason,
-                    )
-
                 # Compose final system prompt: identity/memory + tool guide
                 identity = system_prompt or _DEFAULT_IDENTITY
                 final_system = identity + "\n" + _TOOL_GUIDE
 
-                # Call Claude with timeout wrapper for safety
-                try:
-                    response = await asyncio.wait_for(
-                        self._client.messages.create(
-                            model=model,
-                            max_tokens=4096,
-                            system=final_system,
-                            tools=self._get_filtered_tools(),
-                            messages=messages,
-                        ),
-                        timeout=90.0,  # Additional asyncio timeout as safety net
-                    )
-                except asyncio.TimeoutError:
-                    yield AgentEvent(
-                        type="error",
-                        content="⏱️ Request timed out. Please check your network connection and API key.",
-                    )
-                    return
-                except Exception as api_error:
-                    logger.error(f"Anthropic API error: {api_error}")
-                    yield AgentEvent(
-                        type="error",
-                        content=f"❌ API Error: {str(api_error)}. Please verify your Anthropic API key in Settings.",
-                    )
-                    return
+                # Get filtered tools
+                tools = self._get_filtered_tools()
 
-                # Process response content blocks
+                # Track assistant response and tool calls for this iteration
                 assistant_content = []
-                tool_results_needed = []
+                tool_calls = []
+                text_parts = []
 
-                for block in response.content:
-                    if block.type == "text":
-                        # Text response - yield to user
-                        if block.text:
-                            yield AgentEvent(type="message", content=block.text)
-                        assistant_content.append(block)
+                # Call LLM provider with streaming
+                try:
+                    async for event in self._provider.generate(messages, tools, final_system):
+                        if self._stop_flag:
+                            break
 
-                    elif block.type == "tool_use":
-                        # Tool call - execute it
-                        tool_name = block.name
-                        tool_input = block.input
-                        tool_id = block.id
+                        if event.type == "text":
+                            # Text response - yield to user and accumulate
+                            if event.content:
+                                yield AgentEvent(type="message", content=event.content)
+                                text_parts.append(event.content)
 
-                        # Emit tool_use event
-                        yield AgentEvent(
-                            type="tool_use",
-                            content=f"🔧 Using {tool_name}...",
-                            metadata={"name": tool_name, "input": tool_input},
-                        )
+                        elif event.type == "tool_call":
+                            # Tool call - record it
+                            tool_calls.append(event.content)
+                            tool_name = event.content.get("name", "")
+                            tool_input = event.content.get("input", {})
 
-                        # Execute
-                        result = await self._execute_tool(tool_name, tool_input)
+                            # Emit tool_use event
+                            yield AgentEvent(
+                                type="tool_use",
+                                content=f"🔧 Using {tool_name}...",
+                                metadata={"name": tool_name, "input": tool_input},
+                            )
 
-                        # Emit tool_result event
-                        yield AgentEvent(
-                            type="tool_result",
-                            content=result[:500] + ("..." if len(result) > 500 else ""),
-                            metadata={"name": tool_name},
-                        )
+                            # Execute the tool
+                            result = await self._execute_tool(tool_name, tool_input)
 
-                        assistant_content.append(block)
-                        tool_results_needed.append(
-                            {"type": "tool_result", "tool_use_id": tool_id, "content": result}
-                        )
+                            # Emit tool_result event
+                            yield AgentEvent(
+                                type="tool_result",
+                                content=result[:500] + ("..." if len(result) > 500 else ""),
+                                metadata={"name": tool_name},
+                            )
+
+                            # Store result for next iteration
+                            event.content["result"] = result
+
+                        elif event.type == "error":
+                            yield AgentEvent(type="error", content=event.content)
+                            return
+
+                        elif event.type == "done":
+                            break
+
+                except Exception as api_error:
+                    logger.error(f"LLM provider error: {api_error}")
+                    friendly = format_error_for_user(api_error, "pocketpaw_native")
+                    yield AgentEvent(type="error", content=friendly)
+                    return
+
+                # Build assistant content for history
+                if text_parts:
+                    assistant_content.append({"type": "text", "text": "".join(text_parts)})
+
+                # Add tool calls to assistant content
+                for tc in tool_calls:
+                    assistant_content.append({
+                        "type": "tool_use",
+                        "name": tc.get("name", ""),
+                        "input": tc.get("input", {}),
+                        "id": tc.get("id", ""),
+                    })
 
                 # Add assistant message to history
-                messages.append({"role": "assistant", "content": assistant_content})
+                if assistant_content:
+                    messages.append({"role": "assistant", "content": assistant_content})
 
-                # Check if we're done
-                if response.stop_reason == "end_turn":
+                # Check if we're done (no tool calls)
+                if not tool_calls:
                     break
 
-                # If tools were used, add results and continue
-                if tool_results_needed:
-                    messages.append({"role": "user", "content": tool_results_needed})
-                else:
-                    # No tools and not end_turn - shouldn't happen, but break anyway
-                    break
+                # Build tool results for next iteration
+                tool_results = []
+                for tc in tool_calls:
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tc.get("id", ""),
+                        "name": tc.get("name", ""),
+                        "content": tc.get("result", ""),
+                    })
+
+                # Add tool results to history
+                if tool_results:
+                    messages.append({"role": "user", "content": tool_results})
 
             yield AgentEvent(type="done", content="")
 
         except Exception as e:
             logger.error(f"PocketPaw error: {e}")
-            yield AgentEvent(type="error", content=f"❌ Error: {e}")
+            friendly = format_error_for_user(e, "pocketpaw_native")
+            yield AgentEvent(type="error", content=friendly)
 
     async def run(
         self,
@@ -863,9 +1187,13 @@ class PocketPawOrchestrator:
 
     async def get_status(self) -> dict:
         """Get orchestrator status."""
+        provider_name = self.settings.llm_provider
+        if provider_name == "auto":
+            provider_name = "anthropic"
         return {
             "backend": "pocketpaw_native",
-            "available": self._client is not None,
+            "available": self._provider is not None and self._provider.is_available,
             "executor": "open_interpreter" if self._executor else "fallback",
-            "model": self.settings.anthropic_model,
+            "provider": provider_name,
+            "model": self._provider.get_model_name() if self._provider else "unknown",
         }

@@ -10,6 +10,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 
+from pocketclaw.agents.errors import format_error_for_user
 from pocketclaw.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -272,7 +273,8 @@ class OpenInterpreterAgent:
 
             except Exception as e:
                 logger.error(f"Open Interpreter error: {e}")
-                yield {"type": "error", "content": f"❌ Agent error: {str(e)}"}
+                friendly = format_error_for_user(e, "open_interpreter")
+                yield {"type": "error", "content": friendly}
 
     async def stop(self) -> None:
         """Stop the agent execution."""
