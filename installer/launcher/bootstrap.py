@@ -83,7 +83,10 @@ def _resolve_uv_version() -> str:
 
     try:
         url = "https://api.github.com/repos/astral-sh/uv/releases/latest"
-        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.v3+json"})
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "pocketpaw-installer/1.0",
+        })
         resp = urllib.request.urlopen(req, timeout=10)
         data = json.loads(resp.read())
         tag = data.get("tag_name", "")

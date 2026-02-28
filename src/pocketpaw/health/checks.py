@@ -765,6 +765,15 @@ async def check_llm_reachable() -> HealthCheckResult:
                     message=f"OpenAI API reachable but key is invalid (HTTP {resp.status_code})",
                     fix_hint="Check your OpenAI API key in Settings > API Keys.",
                 )
+            else:
+                return HealthCheckResult(
+                    check_id="llm_reachable",
+                    name="LLM Reachable",
+                    category="connectivity",
+                    status="warning",
+                    message=f"OpenAI API returned unexpected HTTP {resp.status_code}",
+                    fix_hint="Check https://status.openai.com for outages.",
+                )
         except Exception as e:
             return HealthCheckResult(
                 check_id="llm_reachable",

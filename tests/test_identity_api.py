@@ -229,6 +229,14 @@ class TestSaveIdentity:
             assert result["updated"] == ["USER.md"]
             assert not (identity_dir / "malicious_key").exists()
 
+    async def test_invalid_json_returns_400(self):
+        request = MagicMock()
+        request.json = AsyncMock(side_effect=ValueError("Invalid JSON"))
+        
+        from pocketpaw.dashboard import save_identity
+        result = await save_identity(request)
+        assert result.status_code == 400
+        
 
 class TestIdentityAgentIntegration:
     """Tests verifying that saved identity changes are picked up by the agent."""

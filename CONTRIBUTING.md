@@ -185,4 +185,4 @@ Open an issue with:
 
 ## Questions
 
-Open a [Discussion](https://github.com/pocketpaw/pocketpaw/discussions) or comment on a relevant issue. We're around.
+Join our [Discord server](https://dsc.gg/pocketpaw), open a [Discussion](https://github.com/pocketpaw/pocketpaw/discussions), or comment on a relevant issue. We're around.

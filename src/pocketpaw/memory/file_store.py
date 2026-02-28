@@ -430,7 +430,7 @@ class FileMemoryStore:
                 ):
                     continue
                 try:
-                    data = json.loads(session_file.read_text())
+                    data = json.loads(session_file.read_text(encoding="utf-8"))
                     for msg in data:
                         if query_lower in msg.get("content", "").lower():
                             safe_key = session_file.stem
@@ -604,7 +604,7 @@ class FileMemoryStore:
                 session_data = []
                 if session_file.exists():
                     try:
-                        session_data = json.loads(session_file.read_text())
+                        session_data = json.loads(session_file.read_text(encoding="utf-8"))
                     except json.JSONDecodeError:
                         pass
                 session_data.append(
@@ -618,7 +618,7 @@ class FileMemoryStore:
                 )
                 # Atomic write: tmp file + replace to prevent corruption on crash
                 tmp = session_file.with_suffix(".tmp")
-                tmp.write_text(json.dumps(session_data, indent=2))
+                tmp.write_text(json.dumps(session_data, indent=2), encoding="utf-8")
                 tmp.replace(session_file)
                 return session_data
 
@@ -739,7 +739,7 @@ class FileMemoryStore:
             return []
 
         try:
-            raw = await asyncio.to_thread(session_file.read_text)
+            raw = await asyncio.to_thread(lambda: session_file.read_text(encoding="utf-8"))
             data = json.loads(raw)
             return [
                 MemoryEntry(
@@ -763,7 +763,7 @@ class FileMemoryStore:
         def _clear():
             if session_file.exists():
                 try:
-                    data = json.loads(session_file.read_text())
+                    data = json.loads(session_file.read_text(encoding="utf-8"))
                     count = len(data)
                     session_file.unlink()
                     return count
