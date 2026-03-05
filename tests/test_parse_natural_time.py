@@ -9,8 +9,6 @@ This test suite covers:
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from pocketpaw.scheduler import parse_natural_time
 
 

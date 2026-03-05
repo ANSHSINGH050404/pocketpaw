@@ -129,9 +129,7 @@ class MatrixAdapter(BaseChannelAdapter):
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    logger.error(
-                        "Matrix sync_forever error: %s — reconnecting in %ds", e, backoff
-                    )
+                    logger.error("Matrix sync_forever error: %s — reconnecting in %ds", e, backoff)
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, 60)
                 else:

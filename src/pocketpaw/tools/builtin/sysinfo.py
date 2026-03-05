@@ -51,9 +51,7 @@ class SystemInfoTool(BaseTool):
                 net = psutil.net_io_counters()
                 sent_mb = net.bytes_sent / (1024**2)
                 recv_mb = net.bytes_recv / (1024**2)
-                sections.append(
-                    f"🌐 Network: ↑ {sent_mb:.1f} MB sent, ↓ {recv_mb:.1f} MB received"
-                )
+                sections.append(f"🌐 Network: ↑ {sent_mb:.1f} MB sent, ↓ {recv_mb:.1f} MB received")
             except Exception:
                 pass
 

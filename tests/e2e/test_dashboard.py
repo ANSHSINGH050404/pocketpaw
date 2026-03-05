@@ -21,7 +21,7 @@ class TestDashboardLoads:
     def test_chat_view_visible_by_default(self, page: Page, dashboard_url: str):
         """Test that Chat view is visible by default."""
         page.goto(dashboard_url)
-        
+
         # Chat tab should be active
         chat_tab = page.get_by_role("button", name="Chat", exact=True)
         expect(chat_tab).to_be_visible()
@@ -98,7 +98,7 @@ class TestAgentCreation:
         """Test that clicking New Agent opens the creation form."""
         page.goto(dashboard_url)
         page.wait_for_load_state("networkidle")
-        
+
         # Click Deep Work to access agent controls
         page.get_by_role("button", name="Deep Work").click()
         page.wait_for_load_state("networkidle")
@@ -116,7 +116,7 @@ class TestAgentCreation:
         """Test creating a new agent through the UI."""
         page.goto(dashboard_url)
         page.wait_for_load_state("networkidle")
-        
+
         # Click Deep Work to access agent controls
         page.get_by_role("button", name="Deep Work").click()
         page.wait_for_load_state("networkidle")
@@ -142,7 +142,7 @@ class TestAgentCreation:
         """Test deleting an agent through the UI."""
         page.goto(dashboard_url)
         page.wait_for_load_state("networkidle")
-        
+
         # Click Deep Work to access agent controls
         page.get_by_role("button", name="Deep Work").click()
         page.wait_for_load_state("networkidle")
@@ -266,4 +266,3 @@ class TestRemoteAccessModal:
         # May not be visible on all viewports
         if remote_btn.is_visible():
             expect(remote_btn).to_be_visible()
-                
