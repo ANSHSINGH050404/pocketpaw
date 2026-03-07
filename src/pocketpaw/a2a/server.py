@@ -59,6 +59,7 @@ tasks_router = APIRouter(prefix="/a2a/tasks", tags=["A2A"])
 # Agent Card helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_agent_card(base_url: str) -> AgentCard:
     """Build an A2A-compliant Agent Card from current PocketPaw config."""
     # Advertise a skill per enabled tool profile group
@@ -100,6 +101,7 @@ def _build_agent_card(base_url: str) -> AgentCard:
 # ---------------------------------------------------------------------------
 # Internal: bridge A2A task to AgentLoop via message bus
 # ---------------------------------------------------------------------------
+
 
 class _A2ASessionBridge:
     """Bridges the message bus outbound stream to an asyncio Queue for A2A SSE.
@@ -178,6 +180,7 @@ async def _dispatch_to_agent(task_id: str, message: A2AMessage) -> str:
 # Endpoint: Agent Card
 # ---------------------------------------------------------------------------
 
+
 @well_known_router.get("/.well-known/agent.json", response_class=JSONResponse)
 async def get_agent_card(request: Request):
     """Return the A2A Agent Card describing PocketPaw's capabilities.
@@ -192,6 +195,7 @@ async def get_agent_card(request: Request):
 # ---------------------------------------------------------------------------
 # Endpoint: tasks/send (non-streaming)
 # ---------------------------------------------------------------------------
+
 
 @tasks_router.post("/send", response_model=Task)
 async def tasks_send(params: TaskSendParams):
@@ -295,6 +299,7 @@ async def tasks_send(params: TaskSendParams):
 # Endpoint: tasks/send/stream (SSE streaming)
 # ---------------------------------------------------------------------------
 
+
 @tasks_router.post("/send/stream")
 async def tasks_send_stream(params: TaskSendParams):
     """Submit a task and receive an SSE stream of state-update events.
@@ -323,7 +328,6 @@ async def tasks_send_stream(params: TaskSendParams):
     bridge = _A2ASessionBridge(chat_id)
     await bridge.start()
     await _dispatch_to_agent(task_id, params.message)
-
 
     async def _event_generator():
         try:
@@ -361,12 +365,8 @@ async def tasks_send_stream(params: TaskSendParams):
                 if event["type"] == "chunk":
                     chunk_text = event.get("content", "")
                     accumulated.append(chunk_text)
-                    delta_msg = A2AMessage(
-                        role="agent", parts=[TextPart(text=chunk_text)]
-                    )
-                    chunk_status = TaskStatus(
-                        state=TaskState.WORKING, message=delta_msg
-                    )
+                    delta_msg = A2AMessage(role="agent", parts=[TextPart(text=chunk_text)])
+                    chunk_status = TaskStatus(state=TaskState.WORKING, message=delta_msg)
                     yield _format_sse(
                         "task_status_update",
                         {
@@ -378,12 +378,8 @@ async def tasks_send_stream(params: TaskSendParams):
 
                 elif event["type"] == "stream_end":
                     full_text = "".join(accumulated)
-                    agent_reply = A2AMessage(
-                        role="agent", parts=[TextPart(text=full_text)]
-                    )
-                    completed_status = TaskStatus(
-                        state=TaskState.COMPLETED, message=agent_reply
-                    )
+                    agent_reply = A2AMessage(role="agent", parts=[TextPart(text=full_text)])
+                    completed_status = TaskStatus(state=TaskState.COMPLETED, message=agent_reply)
                     _tasks[task_id].status = completed_status
                     _tasks[task_id].history.append(agent_reply)
                     yield _format_sse(
@@ -401,9 +397,7 @@ async def tasks_send_stream(params: TaskSendParams):
                         role="agent",
                         parts=[TextPart(text=event.get("message", "Agent error"))],
                     )
-                    failed_status = TaskStatus(
-                        state=TaskState.FAILED, message=agent_reply
-                    )
+                    failed_status = TaskStatus(state=TaskState.FAILED, message=agent_reply)
                     _tasks[task_id].status = failed_status
                     yield _format_sse(
                         "task_status_update",
@@ -434,6 +428,7 @@ async def tasks_send_stream(params: TaskSendParams):
 # Endpoint: tasks/{task_id} (GET — poll)
 # ---------------------------------------------------------------------------
 
+
 @tasks_router.get("/{task_id}", response_model=Task)
 async def tasks_get(task_id: str):
     """Poll the current status of a previously submitted task."""
@@ -446,6 +441,7 @@ async def tasks_get(task_id: str):
 # ---------------------------------------------------------------------------
 # Endpoint: tasks/{task_id}/cancel
 # ---------------------------------------------------------------------------
+
 
 @tasks_router.post("/{task_id}/cancel")
 async def tasks_cancel(task_id: str):
@@ -469,6 +465,7 @@ async def tasks_cancel(task_id: str):
 # SSE helpers
 # ---------------------------------------------------------------------------
 
+
 def _format_sse(event: str, data: dict) -> str:
     """Format a single SSE message frame."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -477,6 +474,7 @@ def _format_sse(event: str, data: dict) -> str:
 # ---------------------------------------------------------------------------
 # Router registration helper
 # ---------------------------------------------------------------------------
+
 
 def register_routes(app) -> None:
     """Mount all A2A routers onto *app*.

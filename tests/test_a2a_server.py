@@ -106,9 +106,7 @@ class TestModels:
         assert card.default_output_modes == ["text"]
 
     def test_task_send_params_auto_id(self):
-        params = TaskSendParams(
-            message=A2AMessage(role="user", parts=[TextPart(text="test")])
-        )
+        params = TaskSendParams(message=A2AMessage(role="user", parts=[TextPart(text="test")]))
         assert params.id  # auto-generated
 
     def test_task_status_default_timestamp(self):
