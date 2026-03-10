@@ -548,6 +548,16 @@
             "label": "Self-Audit Daemon",
             "href": "/security/self-audit-daemon",
             "icon": "lucide:activity"
+          },
+          {
+            "label": "PII Detection",
+            "href": "/security/pii-masking",
+            "icon": "lucide:user-x"
+          },
+          {
+            "label": "Streaming Redaction",
+            "href": "/security/streaming-redaction",
+            "icon": "lucide:eye-off"
           }
         ]
       },
@@ -628,6 +638,11 @@
             "label": "Autonomous Messaging",
             "href": "/advanced/autonomous-messaging",
             "icon": "lucide:bell"
+          },
+          {
+            "label": "AGENTS.md",
+            "href": "/advanced/agents-md",
+            "icon": "lucide:file-text"
           },
           {
             "label": "WebMCP",
