@@ -363,6 +363,23 @@ class Settings(BaseSettings):
     discord_allowed_user_ids: list[int] = Field(
         default_factory=list, description="Discord user IDs allowed to use the bot"
     )
+    discord_allowed_channel_ids: list[int] = Field(
+        default_factory=list, description="Discord channel IDs the bot is restricted to"
+    )
+    discord_conversation_channel_ids: list[int] = Field(
+        default_factory=list,
+        description="Discord channels where the bot participates in group conversation",
+    )
+    discord_bot_name: str = Field(
+        default="Paw", description="Display name used by the bot in conversation"
+    )
+    discord_status_type: str = Field(
+        default="online", description="Discord bot status: online, idle, dnd, invisible"
+    )
+    discord_activity_type: str = Field(
+        default="", description="Discord bot activity: playing, watching, listening, competing"
+    )
+    discord_activity_text: str = Field(default="", description="Discord bot activity text")
 
     # Slack
     slack_bot_token: str | None = Field(
