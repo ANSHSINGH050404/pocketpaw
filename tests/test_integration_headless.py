@@ -23,7 +23,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -156,9 +155,9 @@ class TestServerStartup:
         Marked @pytest.mark.integration — skipped in CI by default.
         Requires all dashboard dependencies to be installed.
         """
-        import httpx
-        from fastapi.testclient import TestClient
         from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
 
         from pocketpaw.dashboard import app
 
@@ -321,7 +320,7 @@ class TestHeadlessChannelToolAccess:
         permission_line = None
         for line in lines:
             stripped = line.strip()
-            if 'permission_mode' in stripped and '=' in stripped and 'bypassPermissions' in stripped:
+            if all(k in stripped for k in ('permission_mode', '=', 'bypassPermissions')):
                 permission_line = stripped
                 break
 
@@ -554,7 +553,7 @@ class TestToolExecutionTimeout:
 
         try:
             await asyncio.wait_for(run_all(), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pytest.fail(
                 "Concurrent tool calls timed out after 5s — "
                 "possible event loop starvation from a blocking tool call."
