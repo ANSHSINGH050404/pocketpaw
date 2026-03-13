@@ -435,3 +435,104 @@ body {
   border-color: var(--accent-color, #4CAF50);
   color: #fff;
 }
+
+/* =====================================================
+   Premium Animations — Thinking Indicator
+   ===================================================== */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes progress-slide {
+  0% { transform: translateX(-100%) skewX(-12deg); }
+  100% { transform: translateX(250%) skewX(-12deg); }
+}
+
+/* Custom indicator classes for Alpine components */
+.thinking-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.thinking-pill:hover {
+  border-color: rgba(10, 132, 255, 0.4);
+  background: rgba(44, 44, 46, 0.8);
+  box-shadow: 0 4px 16px rgba(10, 132, 255, 0.1);
+}
+
+.thinking-dot-wrapper {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  display: flex;
+}
+
+.thinking-dot-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--accent-color);
+  opacity: 0.5;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.thinking-dot-inner {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-color);
+  box-shadow: 0 0 8px rgba(10, 132, 255, 0.6);
+}
+
+.thinking-text {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.thinking-cursor {
+  width: 1.5px;
+  height: 12px;
+  background: var(--accent-color);
+  opacity: 0.6;
+  border-radius: 999px;
+  animation: cursor-blink 1s steps(2) infinite;
+}
+
+.thinking-shimmer {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: progress-slide 2.5s ease-in-out infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+

@@ -23,6 +23,7 @@ window.PocketPaw.Chat = {
             agentActive: true,
             isStreaming: false,
             isThinking: false,
+            streamingStatus: '',
             streamingContent: '',
             streamingMessageId: null,
             hasShownWelcome: false,

@@ -103,22 +103,39 @@
     >
       <div
         class="px-4 py-3 md:px-5 md:py-3.5 rounded-2xl text-[14px] md:text-[15px] leading-relaxed shadow-sm relative max-w-full bg-[var(--card-bg)] border border-[var(--glass-border)] rounded-bl-sm message-content-wrapper min-h-[44px]"
+        x-show="streamingContent"
       >
         <span
-          x-show="streamingContent"
           x-html="formatMessage(streamingContent)"
         ></span>
-        <span
-          x-show="!streamingContent && isThinking"
-          class="text-white/40 italic"
-        >
-          Thinking<span class="animate-pulse">...</span>
-        </span>
-        <span x-show="!streamingContent && !isThinking" class="text-white/40">
-          Preparing response...
-        </span>
         <span class="animate-pulse font-bold" aria-label="Streaming in progress">▌</span>
       </div>
+
+      <!-- Premium Thinking State -->
+      <div 
+        x-show="!streamingContent && isThinking"
+        class="thinking-pill"
+      >
+        <!-- Pulsing Status Indicator -->
+        <div class="thinking-dot-wrapper">
+          <div class="thinking-dot-ping"></div>
+          <div class="thinking-dot-inner"></div>
+        </div>
+
+        <!-- Status text with cursor -->
+        <div class="flex items-center gap-1.5">
+          <span class="thinking-text" x-text="streamingStatus || 'Thinking'"></span>
+          <div class="thinking-cursor"></div>
+        </div>
+
+        <!-- Shimmer Effect -->
+        <div class="thinking-shimmer"></div>
+      </div>
+
+      <div x-show="!streamingContent && !isThinking" class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/40 text-xs">
+        Preparing response...
+      </div>
+
       <div class="flex gap-2 items-center px-1 opacity-70">
         <span
           class="text-[11px] md:text-xs font-semibold text-[var(--text-secondary)]"
