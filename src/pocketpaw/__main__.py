@@ -180,6 +180,13 @@ Examples:
 
     settings = get_settings()
 
+    # Push unified PocketPaw env vars so backends see the correct API keys
+    # regardless of which backend is selected. This fixes the issue where
+    # switching backends required manually setting different env vars.
+    from pocketpaw.llm.client import resolve_backend_env
+
+    resolve_backend_env(settings)
+
     # Run startup health checks (non-blocking, informational only)
     if settings.health_check_on_startup:
         try:
