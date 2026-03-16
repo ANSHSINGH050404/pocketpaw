@@ -23,7 +23,26 @@ from multiprocessing import Process
 
 import pytest
 
+def _playwright_browsers_installed() -> bool:
+    """Check if Playwright browsers are installed."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser_path = p.chromium.executable_path
+            import pathlib
+            return pathlib.Path(browser_path).exists()
+    except Exception:
+        return False
 
+@pytest.fixture(scope="session", autouse=True)
+def require_playwright_browsers():
+    """Skip all e2e tests if Playwright browsers are not installed."""
+    if not _playwright_browsers_installed():
+        pytest.skip(
+            "Playwright browsers not installed. "
+            "Run: playwright install chromium",
+            allow_module_level=True,
+        )
 def find_free_port() -> int:
     """Find a free port on localhost."""
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
