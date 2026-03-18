@@ -285,6 +285,7 @@ async def test_chat_dispatches_fast_path_for_simple():
         mock_llm.is_openai_compatible = False
         mock_llm.is_gemini = False
         mock_llm.is_litellm = False
+        mock_llm.is_openrouter = False
         mock_resolve.return_value = mock_llm
 
         with patch(_MODEL_ROUTER) as MockRouter:

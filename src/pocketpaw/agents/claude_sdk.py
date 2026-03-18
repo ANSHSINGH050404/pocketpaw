@@ -718,7 +718,14 @@ class ClaudeSDKBackend:
             # Skip if using a non-Anthropic provider, or if the active
             # provider is claude_code (it handles OAuth auth via its CLI).
             is_claude_code_provider = provider in ("claude_code", "claude_agent_sdk")
-            if not (llm.is_ollama or llm.is_openai_compatible or llm.is_gemini or llm.is_litellm):
+            is_non_anthropic = (
+                llm.is_ollama
+                or llm.is_openai_compatible
+                or llm.is_gemini
+                or llm.is_litellm
+                or llm.is_openrouter
+            )
+            if not is_non_anthropic:
                 has_api_key = bool(llm.api_key or os.environ.get("ANTHROPIC_API_KEY"))
                 if not has_api_key and not is_claude_code_provider:
                     yield AgentEvent(
@@ -742,13 +749,7 @@ class ClaudeSDKBackend:
             # the fast-path (direct API) for simple queries.
             is_simple = False
             selection = None
-            if (
-                self.settings.smart_routing_enabled
-                and not llm.is_ollama
-                and not llm.is_openai_compatible
-                and not llm.is_gemini
-                and not llm.is_litellm
-            ):
+            if self.settings.smart_routing_enabled and not is_non_anthropic:
                 from pocketpaw.agents.model_router import ModelRouter, TaskComplexity
 
                 model_router = ModelRouter(self.settings)
@@ -892,7 +893,7 @@ class ClaudeSDKBackend:
             # 1. Smart routing (opt-in) — overrides with complexity-based model
             # 2. Explicit claude_sdk_model — user-chosen fixed model
             # 3. Neither set — let Claude Code CLI auto-select (recommended)
-            if not (llm.is_ollama or llm.is_openai_compatible or llm.is_gemini or llm.is_litellm):
+            if not is_non_anthropic:
                 if self.settings.smart_routing_enabled:
                     from pocketpaw.agents.model_router import ModelRouter
 
