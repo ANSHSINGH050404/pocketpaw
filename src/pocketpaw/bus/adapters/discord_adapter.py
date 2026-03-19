@@ -34,6 +34,7 @@ class DiscliAdapter(BaseChannelAdapter):
         allowed_user_ids: list[int] | None = None,
         allowed_channel_ids: list[int] | None = None,
         conversation_channel_ids: list[int] | None = None,
+        conversation_all_channels: bool = False,
         bot_name: str = "Paw",
         status_type: str = "online",
         activity_type: str = "",
@@ -45,6 +46,7 @@ class DiscliAdapter(BaseChannelAdapter):
         self.allowed_user_ids = allowed_user_ids or []
         self.allowed_channel_ids = allowed_channel_ids or []
         self.conversation_channel_ids: set[int] = set(conversation_channel_ids or [])
+        self.conversation_all_channels = conversation_all_channels
         self.bot_name = bot_name or "Paw"
         self.status_type = (
             status_type if status_type in {"online", "idle", "dnd", "invisible"} else "online"
@@ -405,7 +407,12 @@ class DiscliAdapter(BaseChannelAdapter):
         # Track bot's own messages for conversation history
         if is_bot and author_id == self._bot_id:
             ch_id = int(channel_id)
-            if ch_id in self.conversation_channel_ids:
+            _own_guild_ok = not self.allowed_guild_ids or (
+                guild_id and int(guild_id) in self.allowed_guild_ids
+            )
+            if (self.conversation_all_channels and _own_guild_ok) or (
+                ch_id in self.conversation_channel_ids
+            ):
                 self._add_to_history(ch_id, _BOT_AUTHOR_KEY, content)
             return
 
@@ -413,7 +420,13 @@ class DiscliAdapter(BaseChannelAdapter):
         if is_bot:
             return
 
-        is_conversation = not is_dm and int(channel_id) in self.conversation_channel_ids
+        _in_allowed_guild = not self.allowed_guild_ids or (
+            guild_id and int(guild_id) in self.allowed_guild_ids
+        )
+        is_conversation = not is_dm and (
+            (self.conversation_all_channels and _in_allowed_guild)
+            or int(channel_id) in self.conversation_channel_ids
+        )
 
         # Track conversation history
         if is_conversation:

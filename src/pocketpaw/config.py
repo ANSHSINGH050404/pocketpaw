@@ -420,6 +420,10 @@ class Settings(BaseSettings):
         default_factory=list,
         description="Discord channels where the bot participates in group conversation",
     )
+    discord_conversation_all_channels: bool = Field(
+        default=False,
+        description="Enable conversation mode in all server channels (overrides channel list)",
+    )
     discord_bot_name: str = Field(
         default="Paw", description="Display name used by the bot in conversation"
     )
