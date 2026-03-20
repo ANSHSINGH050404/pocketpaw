@@ -252,6 +252,10 @@ def resolve_backend_env(settings: Settings, *, force: bool = False) -> None:
     if settings.anthropic_api_key:
         _set("ANTHROPIC_API_KEY", settings.anthropic_api_key)
 
+    # -- Claude Code OAuth (Max/Pro subscription in Docker/headless) --
+    if settings.claude_code_oauth_token:
+        _set("CLAUDE_CODE_OAUTH_TOKEN", settings.claude_code_oauth_token)
+
     # -- OpenAI --
     if settings.openai_api_key:
         _set("OPENAI_API_KEY", settings.openai_api_key)

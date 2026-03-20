@@ -335,6 +335,13 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     openai_model: str = Field(default="gpt-5.2", description="OpenAI model to use")
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key")
+    claude_code_oauth_token: str | None = Field(
+        default=None,
+        description=(
+            "Claude Code OAuth token JSON (from `claude setup-token`). "
+            "Allows Docker/headless use of Max/Pro subscription without an API key."
+        ),
+    )
     anthropic_model: str = Field(default="claude-sonnet-4-6", description="Anthropic model to use")
 
     # Memory Backend

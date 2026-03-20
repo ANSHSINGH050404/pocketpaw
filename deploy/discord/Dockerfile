@@ -45,12 +45,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Create non-root user
 RUN groupadd --system pocketpaw && \
     useradd --system --gid pocketpaw --create-home pocketpaw && \
-    mkdir -p /home/pocketpaw/.pocketpaw /home/pocketpaw/workspace && \
+    mkdir -p /home/pocketpaw/.pocketpaw /home/pocketpaw/workspace /home/pocketpaw/.claude && \
     chown -R pocketpaw:pocketpaw /home/pocketpaw
 
 USER pocketpaw
 WORKDIR /home/pocketpaw
 
+# Claude Code requires ~/.claude.json to skip the onboarding/login prompt.
+# Without this marker file, it treats every start as a fresh install.
+RUN echo '{}' > /home/pocketpaw/.claude.json
+
+ENV HOME=/home/pocketpaw
 # Agent-created files land here — bind-mount to access them on the host
 ENV POCKETPAW_FILE_JAIL_PATH=/home/pocketpaw/workspace
 

@@ -842,6 +842,12 @@ class ClaudeSDKBackend:
                 if env_key:
                     sdk_env = {"ANTHROPIC_API_KEY": env_key}
 
+            # Pass Claude Code OAuth token (Max/Pro subscription in Docker/headless)
+            oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+            if oauth_token:
+                sdk_env = sdk_env or {}
+                sdk_env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
             # Strip nesting-detection env vars (set when launched from
             # a Claude Code terminal) so the subprocess starts cleanly.
             # These should already be removed by main(), but do it here
