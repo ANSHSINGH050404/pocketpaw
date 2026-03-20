@@ -110,6 +110,7 @@ The processing pipeline lives in `agents/loop.py` and `agents/router.py`:
    - `codex_cli` — OpenAI Codex CLI subprocess wrapper with MCP support. Lives in `agents/codex_cli.py`.
    - `opencode` — External server-based backend via REST API. Lives in `agents/opencode.py`.
    - `copilot_sdk` — GitHub Copilot SDK with multi-provider support. Lives in `agents/copilot_sdk.py`.
+   - `deep_agents` — LangChain Deep Agents with LangGraph runtime, built-in planning/subagent tools, and multi-provider support. Lives in `agents/deep_agents.py`.
 3. All backends implement the `AgentBackend` protocol (`agents/backend.py`) and yield standardized `AgentEvent` objects with `type`, `content`, and `metadata`
 4. Legacy backend names (`pocketpaw_native`, `open_interpreter`, `claude_code`, `gemini_cli`) are mapped to active backends via `_LEGACY_BACKENDS` in the registry
 

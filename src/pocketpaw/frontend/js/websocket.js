@@ -206,6 +206,8 @@ class PocketPawSocket {
             opencode_base_url: settings.opencodeBaseUrl || 'http://localhost:4096',
             opencode_model: settings.opencodeModel || '',
             opencode_max_turns: parseInt(settings.opencodeMaxTurns) || 0,
+            deep_agents_model: settings.deepAgentsModel || 'anthropic:claude-sonnet-4-6',
+            deep_agents_max_turns: parseInt(settings.deepAgentsMaxTurns) || 0,
             llm_provider: settings.llmProvider,
             ollama_host: settings.ollamaHost,
             ollama_model: settings.ollamaModel,

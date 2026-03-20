@@ -821,6 +821,82 @@
             </div>
           </div>
 
+          <!-- Deep Agents Settings -->
+          <div
+            x-show="settings.agentBackend === 'deep_agents' && isCurrentBackendAvailable()"
+            x-transition
+            class="flex flex-col gap-3 pl-4 border-l-2 border-[var(--accent-color)]/30"
+          >
+            <p class="text-[11px] text-[var(--text-secondary)]/70">
+              Requires <code class="text-[var(--accent-color)]">pip install deepagents</code>.
+              Uses LangChain's <code class="text-[var(--accent-color)]">init_chat_model</code> for multi-provider support.
+            </p>
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Model</label>
+              <input
+                type="text"
+                x-model="settings.deepAgentsModel"
+                @change="saveSettings()"
+                placeholder="anthropic:claude-sonnet-4-6"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+              />
+              <small class="text-white/40 text-[10px]">
+                Format: provider:model. Examples: <code>anthropic:claude-sonnet-4-6</code>,
+                <code>openai:gpt-4o</code>, <code>ollama:llama3.2</code>,
+                <code>google_genai:gemini-2.0-flash</code>,
+                <code>litellm:anthropic/claude-sonnet-4-6</code>
+              </small>
+            </div>
+            <!-- LiteLLM config (inline, shown when model starts with litellm:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('litellm:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">LiteLLM Proxy URL</label>
+                <input type="text" x-model="settings.litellmApiBase" @change="saveSettings()"
+                  placeholder="http://localhost:4000"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">LiteLLM API Key</label>
+                <input type="password" x-model="settings.litellmApiKey" @change="saveSettings()"
+                  placeholder="Optional (proxy master key)"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+              <small class="text-white/50 text-[11px]">Use provider/model format after <code>litellm:</code> (e.g. litellm:huggingface/meta-llama/Llama-3-70b)</small>
+            </div>
+            <!-- Ollama hint (shown when model starts with ollama:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('ollama:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">Ollama Host</label>
+                <input type="text" x-model="settings.ollamaHost" @change="saveSettings()"
+                  placeholder="http://localhost:11434"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+            </div>
+            <!-- OpenRouter hint (shown when model starts with openrouter:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('openrouter:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">OpenRouter API Key</label>
+                <input type="password" x-model="settings.openrouterApiKey" @change="saveSettings()"
+                  placeholder="sk-or-v1-..."
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Max Turns</label>
+              <input
+                type="number"
+                x-model="settings.deepAgentsMaxTurns"
+                @change="saveSettings()"
+                min="1" max="200"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+              />
+            </div>
+          </div>
+
           <!-- OpenCode Settings -->
           <div
             x-show="settings.agentBackend === 'opencode' && isCurrentBackendAvailable()"

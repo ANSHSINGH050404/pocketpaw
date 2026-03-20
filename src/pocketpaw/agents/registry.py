@@ -23,6 +23,7 @@ _BACKEND_REGISTRY: dict[str, tuple[str, str]] = {
     "codex_cli": ("pocketpaw.agents.codex_cli", "CodexCLIBackend"),
     "opencode": ("pocketpaw.agents.opencode", "OpenCodeBackend"),
     "copilot_sdk": ("pocketpaw.agents.copilot_sdk", "CopilotSDKBackend"),
+    "deep_agents": ("pocketpaw.agents.deep_agents", "DeepAgentsBackend"),
 }
 
 # Backends that were removed — map to fallback for graceful migration

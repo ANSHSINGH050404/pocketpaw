@@ -385,6 +385,11 @@
             "icon": "lucide:github"
           },
           {
+            "label": "Deep Agents",
+            "href": "/backends/deep-agents",
+            "icon": "lucide:workflow"
+          },
+          {
             "label": "Ollama (Local LLMs)",
             "href": "/backends/ollama",
             "icon": "lucide:hard-drive"

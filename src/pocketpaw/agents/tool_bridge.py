@@ -4,6 +4,7 @@ Provides:
 - _instantiate_all_tools(backend): discover and instantiate builtin tools, filtered by backend
 - build_openai_function_tools(): wrap tools as OpenAI Agents SDK FunctionTool objects
 - build_adk_function_tools(): wrap tools as Google ADK FunctionTool objects
+- build_deep_agents_tools(): wrap tools as LangChain StructuredTool objects for Deep Agents
 - get_tool_instructions_compact(): compact markdown for system-prompt injection
 
 Backend-aware exclusion:
@@ -251,6 +252,90 @@ def _make_adk_wrapper(tool: Any):
     _adk_tool_wrapper.__annotations__["return"] = str
 
     return _adk_tool_wrapper
+
+
+def build_deep_agents_tools(settings: Any, backend: str = "deep_agents") -> list:
+    """Build a list of LangChain ``StructuredTool`` wrappers for PocketPaw tools.
+
+    Deep Agents accepts LangChain tools, plain callables, or dicts. We use
+    StructuredTool for the richest schema support.
+
+    Only tools permitted by the active ToolPolicy are included.
+
+    Args:
+        settings: A ``Settings`` instance used to build the ToolPolicy.
+
+    Returns:
+        List of ``langchain_core.tools.StructuredTool`` objects (empty if not installed).
+    """
+    try:
+        from langchain_core.tools import StructuredTool  # noqa: F401
+    except ImportError:
+        logger.debug("langchain-core not installed — returning empty tools list")
+        return []
+
+    policy = ToolPolicy(
+        profile=settings.tool_profile,
+        allow=settings.tools_allow,
+        deny=settings.tools_deny,
+    )
+
+    registry = ToolRegistry(policy=policy)
+    for tool in _instantiate_all_tools(backend=backend):
+        registry.register(tool)
+
+    structured_tools: list = []
+    for tool_name in registry.allowed_tool_names:
+        tool = registry.get(tool_name)
+        if tool is None:
+            continue
+
+        wrapper = _make_langchain_wrapper(tool)
+        structured_tools.append(wrapper)
+
+    logger.info("Built %d LangChain StructuredTools from PocketPaw tools", len(structured_tools))
+    return structured_tools
+
+
+def _make_langchain_wrapper(tool: Any):
+    """Create a LangChain StructuredTool wrapper for a PocketPaw tool."""
+    import inspect
+
+    from langchain_core.tools import StructuredTool
+
+    defn = tool.definition
+    props = (defn.parameters or {}).get("properties", {})
+    param_names = list(props.keys())
+
+    async def _run(**kwargs: str) -> str:
+        try:
+            return await tool.execute(**kwargs)
+        except Exception as exc:
+            logger.error("LangChain tool %s execution error: %s", tool.name, exc)
+            return f"Error executing {tool.name}: {exc}"
+
+    # Set function metadata so LangChain can introspect it
+    _run.__name__ = defn.name
+    _run.__qualname__ = defn.name
+    _run.__doc__ = defn.description
+
+    # Build proper signature with string-typed parameters
+    sig_params = [
+        inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, annotation=str)
+        for name in param_names
+    ]
+    _run.__signature__ = inspect.Signature(
+        parameters=sig_params,
+        return_annotation=str,
+    )
+    _run.__annotations__ = {name: str for name in param_names}
+    _run.__annotations__["return"] = str
+
+    return StructuredTool.from_function(
+        coroutine=_run,
+        name=defn.name,
+        description=defn.description,
+    )
 
 
 def get_tool_instructions_compact(settings: Any, backend: str = "opencode") -> str:

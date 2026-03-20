@@ -191,7 +191,7 @@ class Settings(BaseSettings):
         default="claude_agent_sdk",
         description=(
             "Agent backend: 'claude_agent_sdk', 'openai_agents', 'google_adk', "
-            "'codex_cli', 'opencode', or 'copilot_sdk'. "
+            "'codex_cli', 'opencode', 'copilot_sdk', or 'deep_agents'. "
             "All backends support 'litellm' as a provider for open-source model access."
         ),
     )
@@ -269,6 +269,16 @@ class Settings(BaseSettings):
     )
     copilot_sdk_max_turns: int = Field(
         default=100, description="Max turns per query in Copilot SDK backend (0 = unlimited)"
+    )
+
+    # Deep Agents (LangChain/LangGraph) Settings
+    deep_agents_model: str = Field(
+        default="anthropic:claude-sonnet-4-6",
+        description="Model for Deep Agents backend (provider:model format, e.g. 'openai:gpt-4o')",
+    )
+    deep_agents_max_turns: int = Field(
+        default=100,
+        description="Max turns per query in Deep Agents backend (0 = unlimited)",
     )
 
     # OpenCode Settings
