@@ -10,9 +10,10 @@ import urllib.parse
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 
+from pocketpaw.api.deps import require_scope
 from pocketpaw.api.v1.schemas.files import (
     BrowseResponse,
     FileEntry,
@@ -284,7 +285,7 @@ async def download_dir_as_zip(path: str):
     )
 
 
-@router.post("/files/write")
+@router.post("/files/write", dependencies=[Depends(require_scope("files:write"))])
 async def write_file(req: WriteFileRequest):
     """Overwrite a file's content. Only text files within the jail are permitted."""
     from pocketpaw.config import get_settings

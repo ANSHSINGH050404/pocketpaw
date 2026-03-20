@@ -129,7 +129,7 @@ class DeepAgentsBackend:
 
             self._custom_tools = build_deep_agents_tools(self.settings, backend="deep_agents")
         except Exception as exc:
-            logger.debug("Could not build custom tools: %s", exc)
+            logger.info("Could not build custom tools: %s", exc)
             self._custom_tools = []
         return self._custom_tools
 
@@ -370,6 +370,8 @@ class DeepAgentsBackend:
                 if self._stop_flag:
                     break
 
+                if not isinstance(chunk, dict):
+                    continue
                 chunk_type = chunk.get("type", "")
 
                 if chunk_type == "messages":
@@ -424,11 +426,25 @@ class DeepAgentsBackend:
             yield AgentEvent(type="done", content="")
 
         except Exception as e:
-            logger.error("Deep Agents error: %s", e)
+            logger.error("Deep Agents streaming error: %s", e, exc_info=True)
             yield AgentEvent(type="error", content=f"Deep Agents error: {e}")
+            yield AgentEvent(type="done", content="")
 
     async def stop(self) -> None:
         self._stop_flag = True
+        # Clean up MCP client resources if they were allocated
+        if self._mcp_client is not None:
+            try:
+                close = getattr(self._mcp_client, "close", None) or getattr(
+                    self._mcp_client, "aclose", None
+                )
+                if close:
+                    await close()
+            except Exception as exc:
+                logger.debug("MCP client cleanup error: %s", exc)
+            finally:
+                self._mcp_client = None
+                self._mcp_tools = None
 
     async def get_status(self) -> dict[str, Any]:
         provider, model = self._parse_provider_model()

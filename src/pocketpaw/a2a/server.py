@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time as _time
 import uuid
 from datetime import UTC, datetime
@@ -61,8 +62,13 @@ logger = logging.getLogger(__name__)
 # In-memory task store (sufficient for single-process; Phase 3 may persist)
 # ---------------------------------------------------------------------------
 _MAX_TASKS = 1000
+_TASK_TTL_SECONDS = 3600  # Expire terminal tasks after 1 hour
 _tasks: dict[str, Task] = {}
+_task_timestamps: dict[str, float] = {}  # task_id -> creation monotonic time
 _cancel_events: dict[str, asyncio.Event] = {}  # task_id -> cancellation flag
+
+# Task ID format: alphanumeric, hyphens, underscores, dots (1-128 chars)
+_TASK_ID_RE = re.compile(r"^[a-zA-Z0-9._\-]{1,128}$")
 
 # ---------------------------------------------------------------------------
 # Agent card cache (avoids rebuilding skill list from tool registry each time)
@@ -83,8 +89,33 @@ def _get_agent_card_cached(base_url: str) -> dict:
     return card_dict
 
 
+def _validate_task_id(task_id: str) -> None:
+    """Validate that a task ID is a safe, well-formed identifier."""
+    if not _TASK_ID_RE.match(task_id):
+        raise JSONRPCError(
+            -32602,
+            "Invalid task ID format: must be 1-128 alphanumeric, hyphen, underscore, or dot chars",
+        )
+
+
+def _prune_expired_tasks() -> None:
+    """Remove terminal tasks that have exceeded their TTL."""
+    now = _time.monotonic()
+    terminal = {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELED, TaskState.REJECTED}
+    expired = [
+        tid
+        for tid, t in _tasks.items()
+        if t.status.state in terminal and (now - _task_timestamps.get(tid, now)) > _TASK_TTL_SECONDS
+    ]
+    for tid in expired:
+        _tasks.pop(tid, None)
+        _task_timestamps.pop(tid, None)
+        _cancel_events.pop(tid, None)
+
+
 def _store_task(task: Task) -> None:
     """Store a task and prune old tasks to prevent memory leaks."""
+    _prune_expired_tasks()
     if len(_tasks) >= _MAX_TASKS:
         terminal = {
             TaskState.COMPLETED,
@@ -97,8 +128,10 @@ def _store_task(task: Task) -> None:
             next(iter(_tasks)),  # fallback: evict oldest if all are active
         )
         _tasks.pop(evict_id, None)
+        _task_timestamps.pop(evict_id, None)
         _cancel_events.pop(evict_id, None)
     _tasks[task.id] = task
+    _task_timestamps[task.id] = _time.monotonic()
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +360,7 @@ async def _core_message_send(params: dict[str, Any]) -> dict[str, Any]:
     """Core logic for message/send (non-streaming). Returns task dict."""
     send_params = TaskSendParams(**params)
     task_id = send_params.id
+    _validate_task_id(task_id)
 
     # Reject if task exists in a terminal state (spec: terminal states are immutable)
     existing = _tasks.get(task_id)
@@ -450,6 +484,7 @@ async def _core_message_stream(params: dict[str, Any], request_id: int | str | N
     """Core logic for message/stream. Yields JSON-RPC response dicts for SSE."""
     send_params = TaskSendParams(**params)
     task_id = send_params.id
+    _validate_task_id(task_id)
     chat_id = f"a2a:{task_id}"
     timeout = _get_task_timeout()
 
