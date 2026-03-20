@@ -8,7 +8,7 @@ class VectorStoreProtocol(Protocol):
     async def add(self, doc_id: str, text: str, metadata: dict[str, Any] | None = None) -> None:
         """
         Add or update a document in the vector store.
-        
+
         Args:
             doc_id: Unique identifier for the document.
             text: The text content to embed and store.
@@ -18,7 +18,7 @@ class VectorStoreProtocol(Protocol):
 
     async def search(self, query: str, limit: int = 5) -> list[str]:
         """Search for the most relevant documents based on a query string.
-        
+
         Returns a list of document strings.
         """
         ...

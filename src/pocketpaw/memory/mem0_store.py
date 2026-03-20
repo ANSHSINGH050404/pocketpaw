@@ -575,11 +575,7 @@ class Mem0MemoryStore:
             created_at=created_at,
             updated_at=datetime.now(tz=UTC),
             tags=metadata.get("tags", []),
-            metadata={
-                k: v
-                for k, v in metadata.items()
-                if k not in _RESERVED_METADATA_KEYS
-            },
+            metadata={k: v for k, v in metadata.items() if k not in _RESERVED_METADATA_KEYS},
             role=role,
             session_key=metadata.get("session_key"),
         )
