@@ -12,6 +12,7 @@ Uses the official Claude Agent SDK (pip install claude-agent-sdk) which provides
 - MCP server support for custom tools
 """
 
+import asyncio
 import logging
 import re
 from collections.abc import AsyncIterator
@@ -1186,16 +1187,49 @@ class ClaudeSDKBackend:
 
         except Exception as e:
             error_msg = str(e)
+
+            # ── Detect Bun/subprocess crash and auto-retry once ──
+            # The bundled claude.exe uses Bun, which can crash on Windows
+            # with "switch on corrupt value" (exit code 3).
+            stderr_text = "\n".join(_stderr_lines) if _stderr_lines else ""
+            _is_bun_crash = "exit code" in error_msg.lower() and any(
+                hint in stderr_text.lower()
+                for hint in ["bun has crashed", "panic", "switch on corrupt value"]
+            )
+
+            # Clear client on any error
+            self._client = None
+            self._client_options_key = None
+            self._client_in_use = False
+
+            if _is_bun_crash and not getattr(self, "_bun_retry_done", False):
+                self._bun_retry_done = True
+                logger.warning(
+                    "Bun runtime crashed — retrying with fresh client (stderr: %s)",
+                    stderr_text[:200],
+                )
+                yield AgentEvent(
+                    type="status",
+                    content="Runtime crashed, retrying with a fresh process...",
+                )
+                await asyncio.sleep(1)
+                try:
+                    async for retry_event in self.run(
+                        message,
+                        system_prompt=system_prompt,
+                        history=history,
+                        session_key=session_key,
+                    ):
+                        yield retry_event
+                finally:
+                    self._bun_retry_done = False
+                return
+
             logger.error(f"Claude Agent SDK error: {error_msg}", exc_info=True)
 
             # Log any stderr captured from the CLI subprocess
             if _stderr_lines:
                 logger.error("CLI stderr output:\n%s", "\n".join(_stderr_lines))
-
-            # Clear client on unexpected errors
-            self._client = None
-            self._client_options_key = None
-            self._client_in_use = False
 
             # Provide helpful error messages
             if "CLINotFoundError" in error_msg:
@@ -1213,7 +1247,6 @@ class ClaudeSDKBackend:
                     ),
                 )
             else:
-                stderr_text = "\n".join(_stderr_lines) if _stderr_lines else ""
                 yield AgentEvent(
                     type="error",
                     content=llm.format_api_error(e, stderr=stderr_text),
