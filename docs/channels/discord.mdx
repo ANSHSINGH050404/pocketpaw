@@ -3,7 +3,7 @@ title: "Discord Bot Setup: Add PocketPaw to Your Server"
 description: "Run PocketPaw as a Discord bot with /paw slash commands, DM and mention support, streaming responses with edit-in-place, and configurable guild and user allow-lists."
 section: Channels
 ogType: article
-keywords: ["discord bot", "slash commands", "discord.py", "dm support", "streaming"]
+keywords: ["discord bot", "slash commands", "discli", "dm support", "streaming", "conversation mode"]
 tags: ["channels", "discord"]
 ---
 
@@ -17,13 +17,16 @@ PocketPaw integrates with Discord via `discli` (Discord CLI agent). It supports 
   <Step title="Create a Discord application">
     1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
     2. Click "New Application" and name it
-    3. Go to the "Bot" section and create a bot
+    3. Go to the **Bot** section and create a bot
     4. Copy the bot token
+
+    Under **Privileged Gateway Intents**, enable:
+    - **Message Content Intent** (required for reading messages and conversation mode)
   </Step>
   <Step title="Set permissions">
     Under OAuth2 → URL Generator, select:
     - Scopes: `bot`, `applications.commands`
-    - Permissions: `Send Messages`, `Read Message History`, `Use Slash Commands`
+    - Permissions: `Send Messages`, `Read Message History`, `Use Slash Commands`, `Embed Links`, `Attach Files`
   </Step>
   <Step title="Invite to server">
     Use the generated URL to invite the bot to your Discord server.
@@ -44,12 +47,17 @@ PocketPaw integrates with Discord via `discli` (Discord CLI agent). It supports 
 
 | Setting | Env Variable | Description |
 |---------|-------------|-------------|
-| Bot token | `POCKETPAW_DISCORD_BOT_TOKEN` | Discord bot token |
+| Bot token | `POCKETPAW_DISCORD_BOT_TOKEN` | Discord bot token (required) |
 | Allowed guilds | `POCKETPAW_DISCORD_ALLOWED_GUILD_IDS` | Comma-separated guild IDs |
 | Allowed users | `POCKETPAW_DISCORD_ALLOWED_USER_IDS` | Comma-separated user IDs |
 | Allowed channels | `POCKETPAW_DISCORD_ALLOWED_CHANNEL_IDS` | Comma-separated channel IDs |
-| Conversation channels | `POCKETPAW_DISCORD_CONVERSATION_CHANNEL_IDS` | Channels with conversation mode enabled |
-| Bot name | `POCKETPAW_DISCORD_BOT_NAME` | Display name used in conversation prompts |
+| Conversation channels | `POCKETPAW_DISCORD_CONVERSATION_CHANNEL_IDS` | Channels with conversation mode enabled via env |
+| Conversation all channels | `POCKETPAW_DISCORD_CONVERSATION_ALL_CHANNELS` | Enable conversation mode server-wide (`true`/`false`) |
+| Conversation exclude channels | `POCKETPAW_DISCORD_CONVERSATION_EXCLUDE_CHANNEL_IDS` | Channels to exclude from server-wide conversation mode |
+| Bot name | `POCKETPAW_DISCORD_BOT_NAME` | Display name used in conversation prompts (default: `Paw`) |
+| Status type | `POCKETPAW_DISCORD_STATUS_TYPE` | Bot presence status: `online`, `idle`, `dnd`, or `invisible` |
+| Activity type | `POCKETPAW_DISCORD_ACTIVITY_TYPE` | Activity type: `playing`, `streaming`, `listening`, or `watching` |
+| Activity text | `POCKETPAW_DISCORD_ACTIVITY_TEXT` | Text shown next to the activity type |
 
 ## Features
 
@@ -91,7 +99,30 @@ When enabled for a channel, the bot:
 - **Stays silent when appropriate** by returning a `[NO_RESPONSE]` marker that the adapter suppresses, allowing natural "lurking"
 - **Injects conversation context** from the last 30 messages (up to 12,000 characters) into the agent prompt for natural, context-aware replies
 
-Enable conversation mode per channel with the `/converse` admin command.
+**Per-channel:** Use the `/converse` slash command in any channel (requires Administrator or Manage Server permission). Run it again to toggle off.
+
+**Server-wide:** Enable conversation mode across all channels at once via environment variable:
+
+```bash
+export POCKETPAW_DISCORD_CONVERSATION_ALL_CHANNELS=true
+
+# Optionally exclude specific channels (e.g. announcements, rules)
+export POCKETPAW_DISCORD_CONVERSATION_EXCLUDE_CHANNEL_IDS="123456789,987654321"
+```
+
+Idle channels are automatically cleaned up after 1 hour of inactivity.
+
+### Bot Presence
+
+Customize the bot's online status and activity in Discord:
+
+```bash
+export POCKETPAW_DISCORD_STATUS_TYPE=online        # online, idle, dnd, invisible
+export POCKETPAW_DISCORD_ACTIVITY_TYPE=watching     # playing, streaming, listening, watching
+export POCKETPAW_DISCORD_ACTIVITY_TEXT="your code"
+```
+
+This shows the bot as "Watching your code" in the member list.
 
 ### Slash Commands
 
@@ -125,6 +156,19 @@ The MCP server wraps the `discli` CLI and provides structured tools like `discor
 
 The server config is saved to `~/.pocketpaw/mcp_servers.json` and persists across restarts.
 
+## Docker Deployment
+
+A dedicated Discord Docker setup is available for running the bot in a container. See the [Discord Docker Deployment](/deployment/discord-docker) guide for the full walkthrough, including Claude Code OAuth support and Coolify-friendly configuration.
+
+Quick start:
+
+```bash
+cd deploy/discord
+cp .env.example .env
+# Edit .env with your bot token and LLM provider
+docker compose up -d
+```
+
 ## Installation
 
 ```bash
@@ -134,7 +178,7 @@ curl -fsSL https://pocketpaw.xyz/install.sh | sh
 pip install pocketpaw[discord]
 ```
 
-This installs `discord.py` and `discord-cli-agent` as optional dependencies.
+This installs `discord-cli-agent` as an optional dependency.
 
 ## Related
 
@@ -150,5 +194,8 @@ This installs `discord.py` and `discord-cli-agent` as optional dependencies.
   </Card>
   <Card title="All Channels" icon="lucide:radio" href="/channels">
     Compare all 9+ supported messaging platforms.
+  </Card>
+  <Card title="Discord Docker Deployment" icon="lucide:container" href="/deployment/discord-docker">
+    Run the Discord bot in Docker with Claude Code OAuth and Coolify support.
   </Card>
 </CardGroup>

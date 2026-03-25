@@ -12,6 +12,7 @@ Uses the official Claude Agent SDK (pip install claude-agent-sdk) which provides
 - MCP server support for custom tools
 """
 
+import asyncio
 import logging
 import re
 from collections.abc import AsyncIterator
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 _DEFAULT_IDENTITY = (
     "You are PocketPaw, a helpful AI assistant running locally on the user's computer."
 )
+
+_HTTP_TRANSPORTS: frozenset[str] = frozenset({"http", "sse", "streamable-http"})
 
 
 class ClaudeSDKBackend:
@@ -195,12 +198,23 @@ class ClaudeSDKBackend:
     def _is_dangerous_command(self, command: str) -> str | None:
         """Check if a command matches dangerous patterns.
 
+        Uses both regex patterns (for complex matching) and substring
+        patterns (for literal matches).
+
         Args:
             command: Command string to check
 
         Returns:
             The matched pattern if dangerous, None otherwise
         """
+        # Primary: regex matching (catches obfuscation, spacing tricks)
+        from pocketpaw.security.rails import COMPILED_DANGEROUS_PATTERNS
+
+        for pattern in COMPILED_DANGEROUS_PATTERNS:
+            if pattern.search(command):
+                return pattern.pattern
+
+        # Secondary: substring matching (catches simple literal fragments)
         command_lower = command.lower()
         for pattern in DANGEROUS_PATTERNS:
             if pattern.lower() in command_lower:
@@ -284,6 +298,27 @@ class ClaudeSDKBackend:
             if matched:
                 logger.warning(f"🛑 BLOCKED dangerous command: {command[:100]}")
                 logger.warning(f"   └─ Matched pattern: {matched}")
+                # Audit log the blocked command
+                try:
+                    from pocketpaw.security.audit import (
+                        AuditEvent,
+                        AuditSeverity,
+                        get_audit_logger,
+                    )
+
+                    get_audit_logger().log(
+                        AuditEvent.create(
+                            severity=AuditSeverity.ALERT,
+                            actor="agent",
+                            action="dangerous_command_blocked",
+                            target="bash",
+                            status="block",
+                            command=command[:500],
+                            matched_pattern=matched,
+                        )
+                    )
+                except Exception:
+                    pass  # Don't let audit failure break the hook
                 return {
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
@@ -410,7 +445,7 @@ class ClaudeSDKBackend:
                     entry["args"] = cfg.args
                 if cfg.env:
                     entry["env"] = cfg.env
-            elif cfg.transport in ("http", "sse", "streamable-http"):
+            elif cfg.transport in _HTTP_TRANSPORTS:
                 if not cfg.url:
                     logger.warning("MCP server '%s' (%s) has no url", cfg.name, cfg.transport)
                     continue
@@ -496,7 +531,7 @@ class ClaudeSDKBackend:
             elif provider == "openai_compatible" and self.settings.openai_compatible_max_tokens > 0:
                 fast_max_tokens = self.settings.openai_compatible_max_tokens
             else:
-                fast_max_tokens = 1024
+                fast_max_tokens = 4096
 
             async with client.messages.stream(
                 model=model,
@@ -718,7 +753,14 @@ class ClaudeSDKBackend:
             # Skip if using a non-Anthropic provider, or if the active
             # provider is claude_code (it handles OAuth auth via its CLI).
             is_claude_code_provider = provider in ("claude_code", "claude_agent_sdk")
-            if not (llm.is_ollama or llm.is_openai_compatible or llm.is_gemini or llm.is_litellm):
+            is_non_anthropic = (
+                llm.is_ollama
+                or llm.is_openai_compatible
+                or llm.is_gemini
+                or llm.is_litellm
+                or llm.is_openrouter
+            )
+            if not is_non_anthropic:
                 has_api_key = bool(llm.api_key or os.environ.get("ANTHROPIC_API_KEY"))
                 if not has_api_key and not is_claude_code_provider:
                     yield AgentEvent(
@@ -742,13 +784,7 @@ class ClaudeSDKBackend:
             # the fast-path (direct API) for simple queries.
             is_simple = False
             selection = None
-            if (
-                self.settings.smart_routing_enabled
-                and not llm.is_ollama
-                and not llm.is_openai_compatible
-                and not llm.is_gemini
-                and not llm.is_litellm
-            ):
+            if self.settings.smart_routing_enabled and not is_non_anthropic:
                 from pocketpaw.agents.model_router import ModelRouter, TaskComplexity
 
                 model_router = ModelRouter(self.settings)
@@ -778,19 +814,21 @@ class ClaudeSDKBackend:
             # System prompt — instructions are now part of identity
             # (injected by BootstrapContext.to_system_prompt() via INSTRUCTIONS.md)
             identity = system_prompt or _DEFAULT_IDENTITY
+            # The persistent ClaudeSDKClient maintains conversation history
+            # natively across query() calls, so we do NOT inject history into
+            # the system prompt for that path. History is only appended for
+            # the stateless fallback path (which starts fresh each call).
             final_prompt = identity
-
-            # Inject session history into system prompt (SDK query() takes a single string)
+            final_prompt_with_history = identity
             if history:
                 lines = ["# Recent Conversation"]
                 for msg in history:
                     role = msg.get("role", "user").capitalize()
                     content = msg.get("content", "")
-                    # Truncate very long messages to keep prompt manageable
-                    if len(content) > 500:
-                        content = content[:500] + "..."
+                    if len(content) > 2000:
+                        content = content[:2000] + "..."
                     lines.append(f"**{role}**: {content}")
-                final_prompt += "\n\n" + "\n".join(lines)
+                final_prompt_with_history += "\n\n" + "\n".join(lines)
 
             # Build allowed tools list, filtered by tool policy
             all_sdk_tools = [
@@ -841,6 +879,12 @@ class ClaudeSDKBackend:
                 if env_key:
                     sdk_env = {"ANTHROPIC_API_KEY": env_key}
 
+            # Pass Claude Code OAuth token (Max/Pro subscription in Docker/headless)
+            oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+            if oauth_token:
+                sdk_env = sdk_env or {}
+                sdk_env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
             # Strip nesting-detection env vars (set when launched from
             # a Claude Code terminal) so the subprocess starts cleanly.
             # These should already be removed by main(), but do it here
@@ -849,7 +893,7 @@ class ClaudeSDKBackend:
                 os.environ.pop(_strip_key, None)
             if sdk_env:
                 options_kwargs["env"] = sdk_env
-            if llm.is_ollama or llm.is_openai_compatible or llm.is_gemini or llm.is_litellm:
+            if is_non_anthropic:
                 options_kwargs["model"] = llm.model
 
             # ── Debug logging for troubleshooting SDK startup ──
@@ -892,7 +936,7 @@ class ClaudeSDKBackend:
             # 1. Smart routing (opt-in) — overrides with complexity-based model
             # 2. Explicit claude_sdk_model — user-chosen fixed model
             # 3. Neither set — let Claude Code CLI auto-select (recommended)
-            if not (llm.is_ollama or llm.is_openai_compatible or llm.is_gemini or llm.is_litellm):
+            if not is_non_anthropic:
                 if self.settings.smart_routing_enabled:
                     from pocketpaw.agents.model_router import ModelRouter
 
@@ -957,7 +1001,15 @@ class ClaudeSDKBackend:
 
             if event_stream is None:
                 logger.info("Starting stateless query (fallback — _client_in_use was True)")
-                event_stream = self._resilient_query(prompt=message, options=options)
+                # Stateless query starts fresh with no conversation memory,
+                # so inject compacted history into the system prompt.
+                if final_prompt_with_history != final_prompt:
+                    stateless_kwargs = dict(options_kwargs)
+                    stateless_kwargs["system_prompt"] = final_prompt_with_history
+                    stateless_options = self._ClaudeAgentOptions(**stateless_kwargs)
+                else:
+                    stateless_options = options
+                event_stream = self._resilient_query(prompt=message, options=stateless_options)
 
             # State tracking for StreamEvent deduplication
             _streamed_via_events = False
@@ -1135,16 +1187,49 @@ class ClaudeSDKBackend:
 
         except Exception as e:
             error_msg = str(e)
+
+            # ── Detect Bun/subprocess crash and auto-retry once ──
+            # The bundled claude.exe uses Bun, which can crash on Windows
+            # with "switch on corrupt value" (exit code 3).
+            stderr_text = "\n".join(_stderr_lines) if _stderr_lines else ""
+            _is_bun_crash = "exit code" in error_msg.lower() and any(
+                hint in stderr_text.lower()
+                for hint in ["bun has crashed", "panic", "switch on corrupt value"]
+            )
+
+            # Clear client on any error
+            self._client = None
+            self._client_options_key = None
+            self._client_in_use = False
+
+            if _is_bun_crash and not getattr(self, "_bun_retry_done", False):
+                self._bun_retry_done = True
+                logger.warning(
+                    "Bun runtime crashed — retrying with fresh client (stderr: %s)",
+                    stderr_text[:200],
+                )
+                yield AgentEvent(
+                    type="status",
+                    content="Runtime crashed, retrying with a fresh process...",
+                )
+                await asyncio.sleep(1)
+                try:
+                    async for retry_event in self.run(
+                        message,
+                        system_prompt=system_prompt,
+                        history=history,
+                        session_key=session_key,
+                    ):
+                        yield retry_event
+                finally:
+                    self._bun_retry_done = False
+                return
+
             logger.error(f"Claude Agent SDK error: {error_msg}", exc_info=True)
 
             # Log any stderr captured from the CLI subprocess
             if _stderr_lines:
                 logger.error("CLI stderr output:\n%s", "\n".join(_stderr_lines))
-
-            # Clear client on unexpected errors
-            self._client = None
-            self._client_options_key = None
-            self._client_in_use = False
 
             # Provide helpful error messages
             if "CLINotFoundError" in error_msg:
@@ -1162,7 +1247,6 @@ class ClaudeSDKBackend:
                     ),
                 )
             else:
-                stderr_text = "\n".join(_stderr_lines) if _stderr_lines else ""
                 yield AgentEvent(
                     type="error",
                     content=llm.format_api_error(e, stderr=stderr_text),

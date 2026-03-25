@@ -160,6 +160,11 @@
             "icon": "lucide:rocket"
           },
           {
+            "label": "CLI Reference",
+            "href": "/getting-started/cli",
+            "icon": "lucide:terminal"
+          },
+          {
             "label": "Configuration",
             "href": "/getting-started/configuration",
             "icon": "lucide:settings"
@@ -380,6 +385,11 @@
             "icon": "lucide:github"
           },
           {
+            "label": "Deep Agents",
+            "href": "/backends/deep-agents",
+            "icon": "lucide:workflow"
+          },
+          {
             "label": "Ollama (Local LLMs)",
             "href": "/backends/ollama",
             "icon": "lucide:hard-drive"
@@ -513,6 +523,11 @@
             "label": "MCP Servers",
             "href": "/integrations/mcp-servers",
             "icon": "lucide:server"
+          },
+          {
+            "label": "A2A Protocol",
+            "href": "/integrations/a2a-protocol",
+            "icon": "lucide:network"
           }
         ]
       },
@@ -805,6 +820,11 @@
             "label": "Docker",
             "href": "/deployment/docker",
             "icon": "lucide:container"
+          },
+          {
+            "label": "Discord Docker",
+            "href": "/deployment/discord-docker",
+            "icon": "lucide:gamepad-2"
           },
           {
             "label": "Systemd Service",

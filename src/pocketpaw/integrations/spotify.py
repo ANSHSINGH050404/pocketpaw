@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 _SPOTIFY_BASE = "https://api.spotify.com/v1"
 
+# Spotify playback success status codes
+_SPOTIFY_SUCCESS_CODES: frozenset[int] = frozenset({200, 202, 204})
+
 
 class SpotifyClient:
     """HTTP client for Spotify Web API.
@@ -166,7 +169,7 @@ class SpotifyClient:
             else:
                 return f"Unknown action: {action}"
 
-            if resp.status_code in (200, 202, 204):
+            if resp.status_code in _SPOTIFY_SUCCESS_CODES:
                 return f"Playback: {action} OK"
             resp.raise_for_status()
 

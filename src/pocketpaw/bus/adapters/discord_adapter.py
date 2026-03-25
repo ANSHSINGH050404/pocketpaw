@@ -18,10 +18,17 @@ logger = logging.getLogger(__name__)
 
 DISCORD_MSG_LIMIT = 2000
 _NO_RESPONSE_MARKER = "[NO_RESPONSE]"
+
+# Slash commands that map directly to "/{command}" with no extra args
+_SIMPLE_SLASH_COMMANDS: frozenset[str] = frozenset(
+    {"new", "sessions", "clear", "status", "help", "kill", "delete", "backends"}
+)
 _BOT_AUTHOR_KEY = "__bot__"
 _CONVERSATION_HISTORY_SIZE = 30
 _CONVERSATION_CHAR_BUDGET = 12_000
 _IDLE_CHANNEL_TTL = 3600
+# Buffer stream chunks until we can confirm it's not [NO_RESPONSE] (13 chars + margin)
+_STREAM_BUFFER_THRESHOLD = 25
 
 
 class DiscliAdapter(BaseChannelAdapter):
@@ -34,6 +41,8 @@ class DiscliAdapter(BaseChannelAdapter):
         allowed_user_ids: list[int] | None = None,
         allowed_channel_ids: list[int] | None = None,
         conversation_channel_ids: list[int] | None = None,
+        conversation_all_channels: bool = False,
+        conversation_exclude_channel_ids: list[int] | None = None,
         bot_name: str = "Paw",
         status_type: str = "online",
         activity_type: str = "",
@@ -45,6 +54,10 @@ class DiscliAdapter(BaseChannelAdapter):
         self.allowed_user_ids = allowed_user_ids or []
         self.allowed_channel_ids = allowed_channel_ids or []
         self.conversation_channel_ids: set[int] = set(conversation_channel_ids or [])
+        self.conversation_all_channels = conversation_all_channels
+        self.conversation_exclude_channel_ids: set[int] = set(
+            conversation_exclude_channel_ids or []
+        )
         self.bot_name = bot_name or "Paw"
         self.status_type = (
             status_type if status_type in {"online", "idle", "dnd", "invisible"} else "online"
@@ -60,6 +73,7 @@ class DiscliAdapter(BaseChannelAdapter):
         self._req_counter = 0
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._active_streams: dict[str, str] = {}  # chat_id -> stream_id
+        self._stream_buffer: dict[str, str] = {}  # chat_id -> buffered content
 
         # Conversation history (same as original adapter)
         self._conversation_history: dict[int, list[dict[str, str]]] = {}
@@ -305,6 +319,7 @@ class DiscliAdapter(BaseChannelAdapter):
             self._slash_config_path = None
         self._conversation_history.clear()
         self._conversation_last_active.clear()
+        self._stream_buffer.clear()
         logger.info("Discli Adapter stopped")
 
     # ── stdin/stdout Communication ──────────────────────────────────
@@ -405,7 +420,14 @@ class DiscliAdapter(BaseChannelAdapter):
         # Track bot's own messages for conversation history
         if is_bot and author_id == self._bot_id:
             ch_id = int(channel_id)
-            if ch_id in self.conversation_channel_ids:
+            _own_guild_ok = not self.allowed_guild_ids or (
+                guild_id and int(guild_id) in self.allowed_guild_ids
+            )
+            _not_excluded = ch_id not in self.conversation_exclude_channel_ids
+            if _not_excluded and (
+                (self.conversation_all_channels and _own_guild_ok)
+                or ch_id in self.conversation_channel_ids
+            ):
                 self._add_to_history(ch_id, _BOT_AUTHOR_KEY, content)
             return
 
@@ -413,7 +435,19 @@ class DiscliAdapter(BaseChannelAdapter):
         if is_bot:
             return
 
-        is_conversation = not is_dm and int(channel_id) in self.conversation_channel_ids
+        _in_allowed_guild = not self.allowed_guild_ids or (
+            guild_id and int(guild_id) in self.allowed_guild_ids
+        )
+        _ch_id = int(channel_id)
+        _not_excluded = _ch_id not in self.conversation_exclude_channel_ids
+        is_conversation = (
+            not is_dm
+            and _not_excluded
+            and (
+                (self.conversation_all_channels and _in_allowed_guild)
+                or _ch_id in self.conversation_channel_ids
+            )
+        )
 
         # Track conversation history
         if is_conversation:
@@ -554,16 +588,7 @@ class DiscliAdapter(BaseChannelAdapter):
         elif command == "tools":
             name = args.get("name", "")
             content = f"/tools {name}" if name else "/tools"
-        elif command in (
-            "new",
-            "sessions",
-            "clear",
-            "status",
-            "help",
-            "kill",
-            "delete",
-            "backends",
-        ):
+        elif command in _SIMPLE_SLASH_COMMANDS:
             content = f"/{command}"
         else:
             content = f"/{command}"
@@ -647,35 +672,91 @@ class DiscliAdapter(BaseChannelAdapter):
 
     # ── Streaming ───────────────────────────────────────────────────
 
+    async def _flush_stream_buffer(self, chat_id: str, message: OutboundMessage) -> None:
+        """Flush the stream buffer by starting a Discord stream and sending buffered text."""
+        buffered = self._stream_buffer.pop(chat_id, "")
+        if not buffered:
+            return
+
+        interaction_token = (message.metadata or {}).get("interaction_token")
+        result = await self._send_command(
+            "stream_start",
+            channel_id=chat_id,
+            reply_to=message.reply_to,
+            interaction_token=interaction_token,
+        )
+        stream_id = result.get("stream_id")
+        if not stream_id:
+            logger.error("Failed to start stream: %s", result)
+            return
+        self._active_streams[chat_id] = stream_id
+        await self._send_command("stream_chunk", stream_id=stream_id, content=buffered)
+
     async def _handle_stream_chunk(self, message: OutboundMessage) -> None:
         chat_id = message.chat_id
         content = message.content
 
-        # Suppress [NO_RESPONSE] even in streaming mode
-        if self._is_no_response(content):
-            await self._send_command("typing_stop", channel_id=chat_id)
+        # If stream already started, send chunks directly
+        if chat_id in self._active_streams:
+            stream_id = self._active_streams[chat_id]
+            await self._send_command("stream_chunk", stream_id=stream_id, content=content)
             return
 
-        if chat_id not in self._active_streams:
-            # Start a new stream
-            interaction_token = (message.metadata or {}).get("interaction_token")
-            result = await self._send_command(
-                "stream_start",
-                channel_id=chat_id,
-                reply_to=message.reply_to,
-                interaction_token=interaction_token,
-            )
-            stream_id = result.get("stream_id")
-            if not stream_id:
-                logger.error("Failed to start stream: %s", result)
-                return
-            self._active_streams[chat_id] = stream_id
+        # Buffer content until we can confirm it's not [NO_RESPONSE].
+        # This prevents the marker from leaking when split across chunks.
+        self._stream_buffer[chat_id] = self._stream_buffer.get(chat_id, "") + content
+        buffered = self._stream_buffer[chat_id]
 
-        stream_id = self._active_streams[chat_id]
-        await self._send_command("stream_chunk", stream_id=stream_id, content=content)
+        # Already looks like [NO_RESPONSE] — keep buffering, will be caught at stream_end
+        if self._is_no_response(buffered):
+            return
+
+        # Buffer is large enough that it can't be [NO_RESPONSE] — flush to Discord
+        if len(buffered) >= _STREAM_BUFFER_THRESHOLD:
+            await self._flush_stream_buffer(chat_id, message)
 
     async def _handle_stream_end(self, message: OutboundMessage) -> None:
         chat_id = message.chat_id
+        buffered = self._stream_buffer.pop(chat_id, "")
+
+        # Stream was never started — check if we should suppress or send the buffered content
+        if chat_id not in self._active_streams:
+            if not buffered.strip() or self._is_no_response(buffered):
+                # Suppress [NO_RESPONSE] and stop typing
+                await self._send_command("typing_stop", channel_id=chat_id)
+                return
+
+            # Short real response that never hit the buffer threshold — send as regular message
+            await self._send_command("typing_stop", channel_id=chat_id)
+            interaction_token = (message.metadata or {}).get("interaction_token")
+            if interaction_token:
+                await self._send_command(
+                    "interaction_followup",
+                    interaction_token=interaction_token,
+                    content=buffered,
+                )
+            else:
+                reply_to = message.reply_to
+                if reply_to:
+                    await self._send_command(
+                        "reply",
+                        channel_id=chat_id,
+                        message_id=reply_to,
+                        content=buffered,
+                    )
+                else:
+                    await self._send_command("send", channel_id=chat_id, content=buffered)
+
+            for path in message.media or []:
+                await self._send_command("send", channel_id=chat_id, content="", files=[path])
+            return
+
+        # Stream was started — flush any remaining buffer and end normally
+        if buffered:
+            stream_id = self._active_streams.get(chat_id)
+            if stream_id:
+                await self._send_command("stream_chunk", stream_id=stream_id, content=buffered)
+
         stream_id = self._active_streams.pop(chat_id, None)
         if stream_id:
             await self._send_command("stream_end", stream_id=stream_id)
@@ -773,6 +854,10 @@ class DiscliAdapter(BaseChannelAdapter):
     @staticmethod
     def _is_no_response(text: str) -> bool:
         stripped = text.strip()
+        if not stripped:
+            return False
         if stripped in (_NO_RESPONSE_MARKER, f"{_NO_RESPONSE_MARKER}."):
             return True
-        return stripped.strip("`*_ .") == _NO_RESPONSE_MARKER
+        # Strip markdown formatting (backticks, bold, italic, underscores, periods)
+        cleaned = stripped.strip("`*_ .\n\r\t")
+        return cleaned == _NO_RESPONSE_MARKER

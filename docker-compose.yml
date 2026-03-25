@@ -15,6 +15,14 @@ services:
     env_file:
       - path: .env
         required: false
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "4"
+        reservations:
+          memory: 2G
+          cpus: "2"
     restart: unless-stopped
 
   # Local LLM — start with: docker compose --profile ollama up -d

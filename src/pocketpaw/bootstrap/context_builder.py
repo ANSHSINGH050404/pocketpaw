@@ -78,7 +78,14 @@ class AgentContextBuilder:
         parts = [base_prompt]
 
         # 2. Inject memory context (scoped to sender)
-        if include_memory and memory_context:
+        # When soul is active, soul's bootstrap provider already handles persistent
+        # memory (identity, personality, knowledge domains). Skip regular long-term
+        # memory injection to avoid duplication — the agent should use soul_recall
+        # for fact retrieval instead. Session history is still managed by regular memory.
+        from pocketpaw.paw.soul_bridge import SoulBootstrapProvider
+
+        soul_active = isinstance(self.bootstrap, SoulBootstrapProvider)
+        if include_memory and memory_context and not soul_active:
             parts.append(
                 "\n# Memory Context (already loaded — use this directly, "
                 "do NOT call recall unless you need something not listed here)\n" + memory_context
@@ -168,7 +175,29 @@ class AgentContextBuilder:
         except Exception as exc:  # noqa: BLE001
             logger.debug("Health engine failure (non-fatal, skipping health block): %s", exc)
 
-        # 8. Inject AGENTS.md constraints from the target repo
+        # 8. Inject available skills so the agent knows what exists
+        try:
+            from pocketpaw.skills import get_skill_loader
+
+            loader = get_skill_loader()
+            skills = loader.get_all()
+            if skills:
+                skill_lines = []
+                for s in skills.values():
+                    invocable = " (user-invocable)" if s.user_invocable else ""
+                    skill_lines.append(f"- **{s.name}**: {s.description}{invocable}")
+                search_dirs = ", ".join(str(p) for p in loader.paths)
+                parts.append(
+                    "\n# Available Skills\n"
+                    "The following skills have been created and are available. "
+                    "Do NOT recreate them or forget they exist.\n"
+                    + "\n".join(skill_lines)
+                    + f"\n\nSkills directories: {search_dirs}"
+                )
+        except Exception as exc:
+            logger.debug("Skill injection skipped: %s", exc)
+
+        # 9. Inject AGENTS.md constraints from the target repo
         if agents_md_dir:
             try:
                 from pocketpaw.agents_md import AgentsMdLoader

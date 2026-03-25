@@ -195,6 +195,17 @@ class APIKeyManager:
             return None
 
         self._save(records)
+        # Audit the revocation part of the rotation
+        try:
+            from pocketpaw.security.audit import get_audit_logger
+
+            get_audit_logger().log_api_event(
+                action="api_key_rotated_revoke",
+                target=f"key:{key_id}",
+                key_name=old_rec.name,
+            )
+        except Exception:
+            pass
         return self.create(name=old_rec.name, scopes=old_rec.scopes)
 
     def list_keys(self) -> list[APIKeyRecord]:

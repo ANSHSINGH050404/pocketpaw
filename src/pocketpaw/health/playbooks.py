@@ -5,6 +5,11 @@
 
 from __future__ import annotations
 
+# Frozensets for O(1) membership tests inside the section-filter loop
+_API_KEY_CHECK_IDS: frozenset[str] = frozenset(
+    {"api_key_primary", "api_key_format", "secrets_encrypted"}
+)
+
 PLAYBOOKS: dict[str, dict] = {
     "api_key_primary": {
         "symptom": "Agent fails to respond or returns authentication errors",
@@ -135,11 +140,7 @@ def diagnose_config(section: str = "") -> str:
             result = check_fn()
             # Filter by section if specified
             if section:
-                if section == "api_keys" and result.check_id not in (
-                    "api_key_primary",
-                    "api_key_format",
-                    "secrets_encrypted",
-                ):
+                if section == "api_keys" and result.check_id not in _API_KEY_CHECK_IDS:
                     continue
                 elif section == "backend" and result.check_id not in (
                     "backend_deps",

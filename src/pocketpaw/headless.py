@@ -78,6 +78,8 @@ async def run_multi_channel_mode(settings: Settings, args: argparse.Namespace) -
                     allowed_user_ids=settings.discord_allowed_user_ids,
                     allowed_channel_ids=settings.discord_allowed_channel_ids,
                     conversation_channel_ids=settings.discord_conversation_channel_ids,
+                    conversation_all_channels=settings.discord_conversation_all_channels,
+                    conversation_exclude_channel_ids=settings.discord_conversation_exclude_channel_ids,
                     bot_name=settings.discord_bot_name,
                     status_type=settings.discord_status_type,
                     activity_type=settings.discord_activity_type,

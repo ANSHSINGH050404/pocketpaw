@@ -59,6 +59,8 @@ _CHANNEL_CONFIG_KEYS: dict[str, dict[str, str]] = {
         "allowed_user_ids": "discord_allowed_user_ids",
         "allowed_channel_ids": "discord_allowed_channel_ids",
         "conversation_channel_ids": "discord_conversation_channel_ids",
+        "conversation_all_channels": "discord_conversation_all_channels",
+        "conversation_exclude_channel_ids": "discord_conversation_exclude_channel_ids",
         "bot_name": "discord_bot_name",
         "status_type": "discord_status_type",
         "activity_type": "discord_activity_type",

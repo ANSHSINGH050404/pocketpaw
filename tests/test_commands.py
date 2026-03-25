@@ -1204,10 +1204,10 @@ class TestWelcomeHint:
                 mock_ctx.build_system_prompt = AsyncMock(return_value="sys prompt")
                 await loop._process_message_inner(msg, "discord:12345")
 
-        # Welcome was published
+        # Discord is excluded from welcome hints
         outbound_calls = bus.publish_outbound.call_args_list
         welcome_found = any("Welcome to PocketPaw" in str(c) for c in outbound_calls)
-        assert welcome_found, f"Expected welcome hint in {outbound_calls}"
+        assert not welcome_found, f"Discord should not get welcome hint: {outbound_calls}"
 
     @patch("pocketpaw.agents.loop.get_injection_scanner")
     @patch("pocketpaw.agents.loop.get_command_handler")

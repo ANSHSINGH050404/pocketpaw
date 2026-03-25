@@ -338,27 +338,30 @@ async def _handle_request(request: dict) -> dict:
     }
 
 
+async def _read_stdin(loop: asyncio.AbstractEventLoop) -> bytes:
+    """Read a line from stdin in a thread (works on all platforms)."""
+    return await loop.run_in_executor(None, sys.stdin.buffer.readline)
+
+
+async def _read_exact(loop: asyncio.AbstractEventLoop, n: int) -> bytes:
+    """Read exactly n bytes from stdin in a thread (works on all platforms)."""
+    return await loop.run_in_executor(None, sys.stdin.buffer.read, n)
+
+
 async def main():
     """Run the MCP server on stdio."""
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin.buffer)
-
-    writer_transport, writer_protocol = await asyncio.get_event_loop().connect_write_pipe(
-        asyncio.streams.FlowControlMixin, sys.stdout.buffer
-    )
-    writer = asyncio.StreamWriter(writer_transport, writer_protocol, None, asyncio.get_event_loop())
+    loop = asyncio.get_event_loop()
 
     while True:
-        header = await reader.readline()
+        header = await _read_stdin(loop)
         if not header:
             break
 
         header_str = header.decode().strip()
         if header_str.startswith("Content-Length:"):
             content_length = int(header_str.split(":")[1].strip())
-            await reader.readline()  # empty line
-            body = await reader.readexactly(content_length)
+            await _read_stdin(loop)  # empty line
+            body = await _read_exact(loop, content_length)
             request = json.loads(body.decode())
 
             response = await _handle_request(request)
@@ -367,8 +370,8 @@ async def main():
 
             response_bytes = json.dumps(response).encode()
             out = f"Content-Length: {len(response_bytes)}\r\n\r\n".encode() + response_bytes
-            writer.write(out)
-            await writer.drain()
+            sys.stdout.buffer.write(out)
+            sys.stdout.buffer.flush()
 
 
 if __name__ == "__main__":

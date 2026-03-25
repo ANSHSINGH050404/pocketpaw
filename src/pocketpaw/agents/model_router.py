@@ -36,12 +36,25 @@ class ModelSelection:
 _SIMPLE_PATTERNS: list[re.Pattern] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"^(hi|hello|hey|thanks|thank you|bye|goodbye|ok|yes|no|sure)\b",
-        r"^what (is|are|was|were) .{3,30}\??$",
-        r"^(who|when|where) .{3,40}\??$",
-        r"^(good morning|good evening|good night|how are you)",
-        r"^remind me ",
-        r"^(set|create) (a )?reminder",
+        r"^(hi|hello|hey|thanks|thank you|bye|goodbye|ok|yes|no|sure)[.!?\s]*$",
+        r"^(good morning|good evening|good night|how are you)[.!?\s]*$",
+    ]
+]
+
+# Patterns that suggest a message needs tools even if it looks simple.
+# These prevent false-positive SIMPLE classification for questions that
+# require web search, code execution, or file creation.
+_NEEDS_TOOLS_PATTERNS: list[re.Pattern] = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\b(stock|price|market|forecast|predict|data)\b",
+        r"\b(create|make|build|generate|write)\b.*(file|excel|csv|chart|report|document)",
+        r"\b(search|find|look up|google|browse)\b",
+        r"\b(install|download|fetch|scrape|extract)\b",
+        r"\b(run|execute|calculate|compute|code)\b",
+        r"\b(send|email|message|post|upload)\b",
+        r"\b(remind me|set.*reminder)\b",
+        r"\?(.*\b(how|why|explain|what does|how does)\b)",
     ]
 ]
 
@@ -92,6 +105,11 @@ class ModelRouter:
                 reason="Empty message",
             )
 
+        # Check if the message needs tools (web search, code execution, etc.)
+        # This takes priority over simple patterns to avoid stripping tools
+        # from questions like "what is Apple's stock price?"
+        needs_tools = any(p.search(message) for p in _NEEDS_TOOLS_PATTERNS)
+
         # Check complex signals first (so short technical messages stay complex)
         complex_hits = sum(1 for p in _COMPLEX_SIGNALS if p.search(message))
 
@@ -110,14 +128,15 @@ class ModelRouter:
                 reason=f"Very long message ({msg_len} chars)",
             )
 
-        # Check explicit simple patterns (English greetings, reminders)
-        if msg_len <= _SHORT_THRESHOLD:
+        # Check explicit simple patterns (only pure greetings/acknowledgments)
+        # Never classify as SIMPLE if the message needs tools
+        if msg_len <= _SHORT_THRESHOLD and not needs_tools:
             for pattern in _SIMPLE_PATTERNS:
                 if pattern.search(message):
                     return ModelSelection(
                         complexity=TaskComplexity.SIMPLE,
                         model=self.settings.model_tier_simple,
-                        reason="Short message with simple pattern",
+                        reason="Short greeting/acknowledgment",
                     )
 
         # Default: moderate

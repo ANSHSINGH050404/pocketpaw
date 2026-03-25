@@ -25,6 +25,34 @@ logger = logging.getLogger(__name__)
 auth_router = APIRouter()
 
 
+def _audit_auth_event(
+    action: str,
+    request: Request | None = None,
+    status: str = "success",
+) -> None:
+    """Log an authentication event to the audit trail."""
+    try:
+        from pocketpaw.security.audit import AuditEvent, AuditSeverity, get_audit_logger
+
+        severity = AuditSeverity.ALERT if status == "block" else AuditSeverity.INFO
+        client_ip = ""
+        if request:
+            client_ip = request.client.host if request.client else "unknown"
+
+        get_audit_logger().log(
+            AuditEvent.create(
+                severity=severity,
+                actor="dashboard_user",
+                action=action,
+                target="auth",
+                status=status,
+                client_ip=client_ip,
+            )
+        )
+    except Exception:
+        pass  # Don't let audit failure break auth flow
+
+
 # ---------------------------------------------------------------------------
 # Localhost detection
 # ---------------------------------------------------------------------------
@@ -373,11 +401,14 @@ async def cookie_login(request: Request):
             logger.warning("API key verification error during login", exc_info=True)
 
     if not is_valid:
+        _audit_auth_event("login_failed", request, status="block")
         return JSONResponse(status_code=401, content={"detail": "Invalid access token"})
 
     settings = Settings.load()
     session_token = create_session_token(master, ttl_hours=settings.session_token_ttl_hours)
     max_age = settings.session_token_ttl_hours * 3600
+
+    _audit_auth_event("login_success", request, status="success")
 
     response = JSONResponse(content={"ok": True})
     response.set_cookie(
@@ -392,8 +423,9 @@ async def cookie_login(request: Request):
 
 
 @auth_router.post("/api/auth/logout")
-async def cookie_logout():
+async def cookie_logout(request: Request):
     """Clear the session cookie."""
+    _audit_auth_event("logout", request, status="success")
     response = JSONResponse(content={"ok": True})
     response.delete_cookie(key="pocketpaw_session", path="/")
     return response
@@ -436,8 +468,9 @@ async def get_qr_code(request: Request):
 
 
 @auth_router.post("/api/token/regenerate")
-async def regenerate_access_token():
+async def regenerate_access_token(request: Request):
     """Regenerate access token (invalidates old sessions)."""
     # This endpoint implies you are already authorized (middleware checks it)
     new_token = regenerate_token()
+    _audit_auth_event("token_regenerated", request, status="success")
     return {"token": new_token}

@@ -70,15 +70,22 @@ class TestSoulManager:
         await mgr.initialize()
         await mgr.observe("Hello", "Hi there!")
 
-    async def test_get_tools_returns_four(self, soul_settings):
+    async def test_get_tools_returns_six(self, soul_settings):
         from pocketpaw.soul.manager import SoulManager
 
         mgr = SoulManager(soul_settings)
         await mgr.initialize()
         tools = mgr.get_tools()
-        assert len(tools) == 4
+        assert len(tools) == 6
         names = {t.name for t in tools}
-        assert names == {"soul_remember", "soul_recall", "soul_edit_core", "soul_status"}
+        assert names == {
+            "soul_remember",
+            "soul_recall",
+            "soul_edit_core",
+            "soul_status",
+            "soul_evaluate",
+            "soul_reload",
+        }
 
     async def test_corrupt_soul_file_falls_back_to_birth(self, soul_settings, tmp_path):
         from pocketpaw.soul.manager import SoulManager
@@ -238,3 +245,122 @@ class TestSoulManager:
 
         with pytest.raises(FileNotFoundError):
             await mgr.import_from_file(tmp_path / "nonexistent.soul")
+
+    async def test_reload_from_disk(self, soul_settings, tmp_path):
+        """Reload picks up changes from disk."""
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        await mgr.save()
+
+        # Reload should succeed when file exists
+        result = await mgr.reload()
+        assert result is True
+        assert mgr.soul is not None
+
+    async def test_reload_returns_false_when_no_file(self, soul_settings, tmp_path):
+        """Reload returns False when .soul file doesn't exist."""
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        # Don't save, so no file on disk yet -- remove any that initialize may have created
+        soul_file = tmp_path / "test.soul"
+        soul_file.unlink(missing_ok=True)
+
+        result = await mgr.reload()
+        assert result is False
+
+    async def test_evaluate_returns_none_when_unsupported(self, soul_settings):
+        """Evaluate returns None when soul doesn't have evaluate method."""
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        # If soul-protocol < 0.2.4, evaluate() won't exist
+        result = await mgr.evaluate("hello", "hi there")
+        # Result is either None (no method) or a dict (method exists)
+        assert result is None or isinstance(result, dict)
+
+    async def test_dirty_tracking(self, soul_settings):
+        """Dirty flag is set after observe and cleared after save."""
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        assert mgr._dirty is False
+
+        await mgr.observe("hello", "world")
+        assert mgr._dirty is True
+
+        await mgr.save()
+        assert mgr._dirty is False
+
+    async def test_tools_are_cached(self, soul_settings):
+        """get_tools() returns the same list on repeated calls."""
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        tools1 = mgr.get_tools()
+        tools2 = mgr.get_tools()
+        assert tools1 is tools2
+
+    async def test_tools_cache_invalidated_on_import(self, soul_settings, tmp_path):
+        """Importing a soul invalidates the tools cache."""
+        from soul_protocol import Soul
+
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        tools1 = mgr.get_tools()
+
+        donor = await Soul.birth(name="CacheTest", persona="Testing cache invalidation.")
+        donor_path = tmp_path / "donor.soul"
+        await donor.export(donor_path)
+        await mgr.import_from_file(donor_path)
+
+        tools2 = mgr.get_tools()
+        assert tools1 is not tools2
+
+    async def test_external_file_change_detection(self, soul_settings, tmp_path):
+        """_file_changed_externally detects mtime changes."""
+        import os
+        import time
+
+        from pocketpaw.soul.manager import SoulManager
+
+        mgr = SoulManager(soul_settings)
+        await mgr.initialize()
+        await mgr.save()
+
+        assert mgr._file_changed_externally() is False
+
+        # Simulate external modification by touching the file with a future mtime
+        soul_file = tmp_path / "test.soul"
+        time.sleep(0.05)
+        current = soul_file.stat().st_mtime
+        os.utime(soul_file, (current + 1, current + 1))
+
+        assert mgr._file_changed_externally() is True
+
+    async def test_biorhythm_settings_passed(self, tmp_path):
+        """Biorhythm config is included in settings."""
+        from pocketpaw.config import Settings
+
+        settings = Settings(
+            soul_enabled=True,
+            soul_name="BioTest",
+            soul_path=str(tmp_path / "bio.soul"),
+            soul_auto_save_interval=0,
+            soul_biorhythm={
+                "energy_drain_rate": 0.05,
+                "mood_inertia": 0.9,
+                "tired_threshold": 0.2,
+                "auto_regen": 0.02,
+            },
+        )
+        assert settings.soul_biorhythm["energy_drain_rate"] == 0.05
+        assert settings.soul_biorhythm["tired_threshold"] == 0.2

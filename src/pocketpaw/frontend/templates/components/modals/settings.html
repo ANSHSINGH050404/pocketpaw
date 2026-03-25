@@ -821,6 +821,82 @@
             </div>
           </div>
 
+          <!-- Deep Agents Settings -->
+          <div
+            x-show="settings.agentBackend === 'deep_agents' && isCurrentBackendAvailable()"
+            x-transition
+            class="flex flex-col gap-3 pl-4 border-l-2 border-[var(--accent-color)]/30"
+          >
+            <p class="text-[11px] text-[var(--text-secondary)]/70">
+              Requires <code class="text-[var(--accent-color)]">pip install deepagents</code>.
+              Uses LangChain's <code class="text-[var(--accent-color)]">init_chat_model</code> for multi-provider support.
+            </p>
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Model</label>
+              <input
+                type="text"
+                x-model="settings.deepAgentsModel"
+                @change="saveSettings()"
+                placeholder="anthropic:claude-sonnet-4-6"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+              />
+              <small class="text-white/40 text-[10px]">
+                Format: provider:model. Examples: <code>anthropic:claude-sonnet-4-6</code>,
+                <code>openai:gpt-4o</code>, <code>ollama:llama3.2</code>,
+                <code>google_genai:gemini-2.0-flash</code>,
+                <code>litellm:anthropic/claude-sonnet-4-6</code>
+              </small>
+            </div>
+            <!-- LiteLLM config (inline, shown when model starts with litellm:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('litellm:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">LiteLLM Proxy URL</label>
+                <input type="text" x-model="settings.litellmApiBase" @change="saveSettings()"
+                  placeholder="http://localhost:4000"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">LiteLLM API Key</label>
+                <input type="password" x-model="settings.litellmApiKey" @change="saveSettings()"
+                  placeholder="Optional (proxy master key)"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+              <small class="text-white/50 text-[11px]">Use provider/model format after <code>litellm:</code> (e.g. litellm:huggingface/meta-llama/Llama-3-70b)</small>
+            </div>
+            <!-- Ollama hint (shown when model starts with ollama:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('ollama:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">Ollama Host</label>
+                <input type="text" x-model="settings.ollamaHost" @change="saveSettings()"
+                  placeholder="http://localhost:11434"
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+            </div>
+            <!-- OpenRouter hint (shown when model starts with openrouter:) -->
+            <div x-show="(settings.deepAgentsModel || '').startsWith('openrouter:')" x-transition class="flex flex-col gap-2">
+              <div class="flex flex-col gap-1">
+                <label class="text-[12px] font-medium text-[var(--text-secondary)]">OpenRouter API Key</label>
+                <input type="password" x-model="settings.openrouterApiKey" @change="saveSettings()"
+                  placeholder="sk-or-v1-..."
+                  class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Max Turns</label>
+              <input
+                type="number"
+                x-model="settings.deepAgentsMaxTurns"
+                @change="saveSettings()"
+                min="1" max="200"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all"
+              />
+            </div>
+          </div>
+
           <!-- OpenCode Settings -->
           <div
             x-show="settings.agentBackend === 'opencode' && isCurrentBackendAvailable()"
@@ -2024,6 +2100,7 @@
               >
                 <option value="openai">OpenAI Whisper</option>
                 <option value="sarvam">Sarvam AI Saaras (Indian Languages)</option>
+                <option value="elevenlabs">ElevenLabs</option>
               </select>
               <div
                 class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50"
@@ -2043,12 +2120,14 @@
               type="text"
               x-model="settings.sttModel"
               @change="saveSettings()"
-              :placeholder="settings.sttProvider === 'sarvam' ? 'saaras:v3' : 'whisper-1'"
+              :placeholder="settings.sttProvider === 'sarvam' ? 'saaras:v3' : settings.sttProvider === 'elevenlabs' ? 'scribe_v1' : 'whisper-1'"
               class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
             />
-            <small class="text-white/50 text-[11px]"
-              >OpenAI Whisper model for speech-to-text transcription</small
-            >
+            <small class="text-white/50 text-[11px]" x-text="
+              settings.sttProvider === 'elevenlabs' ? 'ElevenLabs Scribe model (e.g. scribe_v1)' :
+              settings.sttProvider === 'sarvam' ? 'Sarvam Saaras model (e.g. saaras:v3)' :
+              'OpenAI Whisper model (e.g. whisper-1)'
+            "></small>
           </div>
 
           <!-- OCR Provider -->
@@ -2330,6 +2409,76 @@
                   </div>
                 </div>
               </template>
+            </div>
+          </div>
+
+          <div class="border-t border-[var(--glass-border)]"></div>
+
+          <!-- A2A Protocol -->
+          <div>
+            <label class="flex items-start gap-2.5 cursor-pointer group">
+              <input
+                type="checkbox"
+                x-model="settings.a2aEnabled"
+                @change="saveSettings()"
+                class="mt-0.5 accent-[var(--accent-color)] w-4 h-4"
+              />
+              <div class="flex flex-col">
+                <span class="text-[13px] font-medium group-hover:text-white transition-colors">A2A Protocol</span>
+                <span class="text-[11px] text-white/50 mt-0.5">Expose PocketPaw as a remote A2A agent and delegate tasks to external agents</span>
+              </div>
+            </label>
+          </div>
+
+          <!-- A2A sub-settings -->
+          <div x-show="settings.a2aEnabled" x-transition class="pl-7 border-l-2 border-[var(--glass-border)] space-y-3">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Agent Name</label>
+              <input
+                type="text"
+                x-model="settings.a2aAgentName"
+                @change="saveSettings()"
+                placeholder="PocketPaw"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+              />
+              <span class="text-[11px] text-white/40">Name advertised in the Agent Card to other agents</span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Agent Description</label>
+              <textarea
+                x-model="settings.a2aAgentDescription"
+                @change="saveSettings()"
+                placeholder="Leave empty for default description"
+                rows="2"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40 resize-y"
+              ></textarea>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Task Timeout (seconds)</label>
+              <input
+                type="number"
+                x-model.number="settings.a2aTaskTimeout"
+                @change="saveSettings()"
+                min="10"
+                max="600"
+                placeholder="120"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40"
+              />
+              <span class="text-[11px] text-white/40">Maximum time to wait for an agent response before failing the task</span>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[12px] font-medium text-[var(--text-secondary)]">Trusted Agents</label>
+              <textarea
+                x-model="settings.a2aTrustedAgents"
+                @change="saveSettings()"
+                placeholder="http://agent-b:8001&#10;http://agent-c:8002"
+                rows="3"
+                class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2 px-3 text-[13px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/40 resize-y font-mono"
+              ></textarea>
+              <span class="text-[11px] text-white/40">One URL per line. Only these agents can be used for outbound delegation (SSRF protection)</span>
             </div>
           </div>
         </div>

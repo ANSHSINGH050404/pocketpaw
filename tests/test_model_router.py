@@ -42,12 +42,14 @@ class TestSimple:
         assert result.complexity == TaskComplexity.SIMPLE
 
     def test_short_question(self, router):
+        # Short questions deserve real answers (MODERATE), not fast-path Haiku
         result = router.classify("What is Python?")
-        assert result.complexity == TaskComplexity.SIMPLE
+        assert result.complexity == TaskComplexity.MODERATE
 
     def test_reminder_request(self, router):
+        # Reminders need tools, so they should be at least MODERATE
         result = router.classify("Remind me to call mom")
-        assert result.complexity == TaskComplexity.SIMPLE
+        assert result.complexity == TaskComplexity.MODERATE
 
     def test_good_morning(self, router):
         result = router.classify("Good morning")

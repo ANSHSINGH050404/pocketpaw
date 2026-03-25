@@ -14,6 +14,9 @@ import click
 
 logger = logging.getLogger(__name__)
 
+# CLI exit commands recognised in the interactive chat loop
+_EXIT_COMMANDS: frozenset[str] = frozenset({"exit", "quit", "bye"})
+
 
 def _run_async(coro):
     """Bridge sync Click commands to async internals. When already inside a running event loop
@@ -295,7 +298,7 @@ async def _chat_async() -> None:
 
         if not user_input:
             continue
-        if user_input.lower() in ("exit", "quit", "bye"):
+        if user_input.lower() in _EXIT_COMMANDS:
             _print("Goodbye!", style="dim")
             break
 

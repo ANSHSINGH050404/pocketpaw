@@ -1,6 +1,7 @@
-# Soul tools — four BaseTool implementations for soul-protocol integration.
+# Soul tools — BaseTool implementations for soul-protocol integration.
 # Created: 2026-03-02
-# SoulRememberTool, SoulRecallTool, SoulEditCoreTool, SoulStatusTool.
+# SoulRememberTool, SoulRecallTool, SoulEditCoreTool, SoulStatusTool,
+# SoulEvaluateTool (v0.2.4+), SoulReloadTool (v0.2.4+).
 
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ from pocketpaw.tools.protocol import BaseTool
 
 if TYPE_CHECKING:
     from soul_protocol import Soul
+
+    from pocketpaw.soul.manager import SoulManager
 
 
 class SoulRememberTool(BaseTool):
@@ -221,3 +224,84 @@ class SoulStatusTool(BaseTool):
             return json.dumps(status, indent=2, default=str)
         except Exception as e:
             return self._error(f"Failed to get soul status: {e}")
+
+
+class SoulEvaluateTool(BaseTool):
+    """Rubric-based self-evaluation of responses (v0.2.4+)."""
+
+    def __init__(self, soul: Soul, manager: SoulManager) -> None:
+        self._soul = soul
+        self._manager = manager
+
+    @property
+    def name(self) -> str:
+        return "soul_evaluate"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Evaluate a response against quality rubrics. Returns heuristic scores "
+            "for completeness, relevance, helpfulness, specificity, empathy, clarity, "
+            "and originality. Results feed into skill XP and procedural memory."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "user_input": {
+                    "type": "string",
+                    "description": "The user's original message/question",
+                },
+                "agent_output": {
+                    "type": "string",
+                    "description": "The agent's response to evaluate",
+                },
+            },
+            "required": ["user_input", "agent_output"],
+        }
+
+    async def execute(self, user_input: str = "", agent_output: str = "", **kwargs: Any) -> str:
+        try:
+            result = await self._manager.evaluate(user_input, agent_output)
+            if result is None:
+                return self._error(
+                    "Self-evaluation not available. Requires soul-protocol >= 0.2.4."
+                )
+            return json.dumps(result, indent=2, default=str)
+        except Exception as e:
+            return self._error(f"Evaluation failed: {e}")
+
+
+class SoulReloadTool(BaseTool):
+    """Reload soul from disk (v0.2.4+)."""
+
+    def __init__(self, manager: SoulManager) -> None:
+        self._manager = manager
+
+    @property
+    def name(self) -> str:
+        return "soul_reload"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Reload the soul from its .soul file on disk. Use this when the soul "
+            "file has been modified externally (e.g. by another client or tool) "
+            "and you want to pick up the latest state."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {"type": "object", "properties": {}, "required": []}
+
+    async def execute(self, **kwargs: Any) -> str:
+        try:
+            success = await self._manager.reload()
+            if success:
+                name = self._manager.soul.name if self._manager.soul else "unknown"
+                return self._success(f"Soul reloaded successfully: {name}")
+            return self._error("Reload failed. Check if the .soul file exists and is valid.")
+        except Exception as e:
+            return self._error(f"Reload failed: {e}")

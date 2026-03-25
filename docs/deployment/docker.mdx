@@ -193,6 +193,33 @@ git pull && docker compose build && docker compose up -d
 
 Playwright Chromium is included in the Docker image along with all required shared libraries. Browser tools work out of the box inside the container -- no additional setup needed.
 
+## Claude Code OAuth Support
+
+The Docker image includes the Claude Code CLI pre-installed. You can authenticate using an OAuth token from your Claude Max or Pro plan instead of a separate API key.
+
+**Option 1: OAuth token** (recommended for remote/Coolify deployments):
+
+```bash
+# Generate a long-lived token on your local machine
+claude setup-token
+
+# Add to .env
+POCKETPAW_CLAUDE_SDK_PROVIDER=claude_code
+POCKETPAW_CLAUDE_CODE_OAUTH_TOKEN={"accessToken":"sk-ant-oat01-...","refreshToken":"sk-ant-ort01-...","expiresAt":"2027-..."}
+```
+
+**Option 2: CLI interactive login** (persisted in a volume):
+
+Mount a volume to `/home/pocketpaw/.claude`, exec into the container, run `claude`, and complete the browser-based login once. Credentials persist across restarts.
+
+See the [Discord Docker guide](/deployment/discord-docker) for detailed instructions on both options.
+
+## Discord-Only Deployment
+
+For a lightweight, headless Discord bot without the web dashboard, use the dedicated setup in `deploy/discord/`. It has a smaller image (no Playwright/Chromium), its own Dockerfile, and compose file optimized for single-channel operation.
+
+See [Discord Docker Deployment](/deployment/discord-docker) for the full guide.
+
 ## Limitations
 
 - **Desktop tools** (`pyautogui`) require a display server and won't work in a headless container. They fail gracefully at invocation time.
@@ -210,5 +237,8 @@ Playwright Chromium is included in the Docker image along with all required shar
   </Card>
   <Card title="Configuration" icon="lucide:settings" href="/getting-started/configuration">
     Full reference for all PocketPaw environment variables and config options.
+  </Card>
+  <Card title="Discord Docker" icon="lucide:gamepad-2" href="/deployment/discord-docker">
+    Lightweight headless Discord bot deployment with Claude Code OAuth.
   </Card>
 </CardGroup>

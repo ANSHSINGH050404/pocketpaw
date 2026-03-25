@@ -56,6 +56,10 @@ async def get_channels_status():
     result["discord"]["allowed_user_ids"] = settings.discord_allowed_user_ids
     result["discord"]["allowed_channel_ids"] = settings.discord_allowed_channel_ids
     result["discord"]["conversation_channel_ids"] = settings.discord_conversation_channel_ids
+    result["discord"]["conversation_all_channels"] = settings.discord_conversation_all_channels
+    result["discord"]["conversation_exclude_channel_ids"] = (
+        settings.discord_conversation_exclude_channel_ids
+    )
     return result
 
 

@@ -11,6 +11,7 @@ import asyncio
 import logging
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 from pocketpaw.agents.router import AgentRouter
@@ -55,6 +56,24 @@ def _extract_media_paths(text: str) -> list[str]:
 def _extract_generated_paths(text: str) -> list[str]:
     """Fallback: extract file paths under ~/.pocketpaw/generated/ from agent text."""
     return _GENERATED_PATH_RE.findall(text)
+
+
+# Strip markdown links to generated audio files that the LLM may insert after calling tts tool.
+_AUDIO_LINK_RE = re.compile(
+    r"\[(?:[^\]]*?)\]\([^)]*generated[/\\]audio[/\\][^)]*\)\n?",
+    re.IGNORECASE,
+)
+
+# Audio file extensions for voice message detection
+_AUDIO_EXTS = {".ogg", ".oga", ".mp3", ".wav", ".m4a", ".opus", ".aac", ".flac"}
+
+
+def _strip_tts_links(text: str) -> str:
+    """Remove generated-audio markdown links and bare media tags from LLM text output."""
+    text = _AUDIO_LINK_RE.sub("", text)
+    text = re.sub(r"<!-- media:[^>]+-->", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 class AgentLoop:
@@ -251,7 +270,9 @@ class AgentLoop:
                         )
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Failed to write audit log for /kill action",
+                    )
 
                 await self.bus.publish_outbound(
                     OutboundMessage(
@@ -323,7 +344,7 @@ class AgentLoop:
             logger.info("Processing cancelled for session %s", session_key)
             raise
 
-    _WELCOME_EXCLUDED = frozenset({Channel.WEBSOCKET, Channel.CLI, Channel.SYSTEM})
+    _WELCOME_EXCLUDED = frozenset({Channel.WEBSOCKET, Channel.CLI, Channel.SYSTEM, Channel.DISCORD})
 
     async def _process_message_inner(self, message: InboundMessage, session_key: str) -> None:
         """Inner message processing (called under concurrency guards)."""
@@ -431,6 +452,10 @@ class AgentLoop:
             )
 
             # 1b. Inject inbound media file paths so the agent can use them
+            # Also detect whether this is a voice message so we can auto-TTS the reply.
+            is_voice_message = any(
+                Path(p).suffix.lower() in _AUDIO_EXTS for p in (message.media or [])
+            )
             if message.media:
                 paths_info = ", ".join(message.media)
                 content += f"\n[Media files on disk: {paths_info}]"
@@ -482,7 +507,10 @@ class AgentLoop:
                         )
                     )
             except Exception:
-                pass  # Never let AGENTS.md discovery break the processing pipeline
+                logger.debug(
+                    "AGENTS.md discovery failed (continuing)",
+                    exc_info=True,
+                )
 
             # 2b. Emit thinking event
             # 2b. Periodic identity reinforcement for long conversations.
@@ -583,7 +611,10 @@ class AgentLoop:
                                 total_cost_usd=meta.get("total_cost_usd"),
                             )
                         except Exception:
-                            pass
+                            logger.debug(
+                                "Failed to persist token usage metrics",
+                                exc_info=True,
+                            )
 
                     elif etype == "tool_use":
                         tool_name = meta.get("name") or meta.get("tool", "unknown")
@@ -605,7 +636,11 @@ class AgentLoop:
                                 tool_name, tool_input if isinstance(tool_input, dict) else {}
                             )
                         except Exception:
-                            pass
+                            logger.debug(
+                                "Failed to record recent file tracker event for tool '%s'",
+                                tool_name,
+                                exc_info=True,
+                            )
 
                         # AskUserQuestion — forward the question to the
                         # client so the user can see and answer it.
@@ -677,9 +712,35 @@ class AgentLoop:
             if not media_paths and full_response:
                 media_paths.extend(_extract_generated_paths(full_response))
 
+            # 4b. Auto-TTS: if the inbound message was a voice note and the agent
+            # didn't already call text_to_speech (no audio in media_paths), synthesize
+            # the full response as a voice reply now.
+            already_has_audio = any(Path(p).suffix.lower() in _AUDIO_EXTS for p in media_paths)
+            voice_media_paths: list[str] = []
+            if (
+                is_voice_message
+                and not already_has_audio
+                and not cancelled
+                and full_response
+                and self.settings.voice_reply_enabled
+            ):
+                try:
+                    from pocketpaw.tools.builtin.voice import synthesize_speech
+
+                    tts_path = await synthesize_speech(full_response)
+                    if tts_path:
+                        logger.info("Auto-TTS voice reply: %s", tts_path)
+                        media_paths.append(tts_path)
+                        voice_media_paths.append(tts_path)
+                except Exception as _tts_err:
+                    logger.warning("Auto-TTS failed: %s", _tts_err)
+
             # Deduplicate while preserving order
             seen: set[str] = set()
             media_paths = [p for p in media_paths if not (p in seen or seen.add(p))]
+            metadata_out: dict[str, Any] = {}
+            if voice_media_paths:
+                metadata_out["voice_media_paths"] = voice_media_paths
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=message.channel,
@@ -687,10 +748,14 @@ class AgentLoop:
                     content="",
                     is_stream_end=True,
                     media=media_paths,
+                    metadata=metadata_out,
                 )
             )
 
             # 5. Store assistant response in memory
+            # Strip TTS links from full_response before storing (keep memory clean)
+            if full_response:
+                full_response = _strip_tts_links(full_response)
             if cancelled and full_response:
                 full_response += "\n\n[Response interrupted]"
             if full_response:
@@ -706,10 +771,18 @@ class AgentLoop:
                 )
 
                 # 6. Auto-learn: extract facts from conversation (non-blocking)
-                # Skip auto-learn on cancelled responses — partial data is unreliable
-                should_auto_learn = not cancelled and (
-                    (self.settings.memory_backend == "mem0" and self.settings.mem0_auto_learn)
-                    or (self.settings.memory_backend == "file" and self.settings.file_auto_learn)
+                # Skip auto-learn on cancelled responses — partial data is unreliable.
+                # Also skip when soul is active — soul.observe() + reflect() handles
+                # fact extraction and memory consolidation, so auto_learn would duplicate.
+                should_auto_learn = (
+                    not cancelled
+                    and self._soul_manager is None
+                    and (
+                        (self.settings.memory_backend == "mem0" and self.settings.mem0_auto_learn)
+                        or (
+                            self.settings.memory_backend == "file" and self.settings.file_auto_learn
+                        )
+                    )
                 )
                 if should_auto_learn:
                     t = asyncio.create_task(
@@ -753,13 +826,19 @@ class AgentLoop:
                     context={"session_key": session_key},
                 )
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to persist processing error in health engine",
+                    exc_info=True,
+                )
             # Kill the backend on error
             if router is not None:
                 try:
                     await router.stop()
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Failed to stop router cleanly after processing error",
+                        exc_info=True,
+                    )
 
             # Apply output redaction to exception messages
             error_msg = redact_output(f"An error occurred: {str(e)}")
@@ -817,7 +896,7 @@ class AgentLoop:
     async def _soul_observe_and_emit(
         self, user_input: str, agent_output: str, session_key: str
     ) -> None:
-        """Observe interaction and emit soul state event."""
+        """Observe interaction, run self-evaluation, and emit soul state event."""
         if self._soul_manager is None or not self._soul_manager._initialized:
             return
         try:
@@ -825,14 +904,21 @@ class AgentLoop:
             soul = self._soul_manager.soul
             if soul is not None:
                 state = soul.state
+                event_data: dict[str, Any] = {
+                    "mood": getattr(state, "mood", None),
+                    "energy": getattr(state, "energy", None),
+                    "session_key": session_key,
+                }
+
+                # v0.2.4+: Run rubric self-evaluation (non-blocking)
+                eval_result = await self._soul_manager.evaluate(user_input, agent_output)
+                if eval_result is not None:
+                    event_data["evaluation"] = eval_result
+
                 await self.bus.publish_system(
                     SystemEvent(
                         event_type="soul_state",
-                        data={
-                            "mood": getattr(state, "mood", None),
-                            "energy": getattr(state, "energy", None),
-                            "session_key": session_key,
-                        },
+                        data=event_data,
                     )
                 )
         except Exception:

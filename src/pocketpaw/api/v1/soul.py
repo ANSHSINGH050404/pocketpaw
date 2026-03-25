@@ -56,6 +56,48 @@ async def export_soul():
     return {"path": str(mgr.soul_file), "status": "exported"}
 
 
+@router.post("/soul/reload")
+async def reload_soul():
+    """Reload the soul from its .soul file on disk (v0.2.4+).
+
+    Useful when the file was modified by another client.
+    """
+    from pocketpaw.soul.manager import get_soul_manager
+
+    mgr = get_soul_manager()
+    if mgr is None or mgr.soul is None:
+        return {"error": "Soul not enabled"}
+
+    success = await mgr.reload()
+    if success:
+        return {"status": "reloaded", "name": mgr.soul.name}
+    return {"error": "Reload failed. Check if the .soul file exists and is valid."}
+
+
+@router.post("/soul/evaluate")
+async def evaluate_soul(body: dict):
+    """Run rubric-based self-evaluation on a response (v0.2.4+).
+
+    Body: {"user_input": "...", "agent_output": "..."}
+    Returns heuristic scores for 7 criteria.
+    """
+    from pocketpaw.soul.manager import get_soul_manager
+
+    mgr = get_soul_manager()
+    if mgr is None or mgr.soul is None:
+        return {"error": "Soul not enabled"}
+
+    user_input = body.get("user_input", "")
+    agent_output = body.get("agent_output", "")
+    if not user_input or not agent_output:
+        return {"error": "Both 'user_input' and 'agent_output' are required"}
+
+    result = await mgr.evaluate(user_input, agent_output)
+    if result is None:
+        return {"error": "Self-evaluation not available. Requires soul-protocol >= 0.2.4."}
+    return {"status": "evaluated", "scores": result}
+
+
 _ALLOWED_IMPORT_SUFFIXES = frozenset({".soul", ".yaml", ".yml", ".json"})
 
 

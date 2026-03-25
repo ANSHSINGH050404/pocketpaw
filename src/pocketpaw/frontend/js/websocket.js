@@ -206,6 +206,8 @@ class PocketPawSocket {
             opencode_base_url: settings.opencodeBaseUrl || 'http://localhost:4096',
             opencode_model: settings.opencodeModel || '',
             opencode_max_turns: parseInt(settings.opencodeMaxTurns) || 0,
+            deep_agents_model: settings.deepAgentsModel || 'anthropic:claude-sonnet-4-6',
+            deep_agents_max_turns: parseInt(settings.deepAgentsMaxTurns) || 0,
             llm_provider: settings.llmProvider,
             ollama_host: settings.ollamaHost,
             ollama_model: settings.ollamaModel,
@@ -254,6 +256,13 @@ class PocketPawSocket {
             mem0_ollama_base_url: settings.mem0OllamaBaseUrl,
             web_host: settings.webHost,
             web_port: parseInt(settings.webPort) || 8888,
+            a2a_enabled: settings.a2aEnabled,
+            a2a_agent_name: settings.a2aAgentName,
+            a2a_agent_description: settings.a2aAgentDescription,
+            a2a_task_timeout: parseInt(settings.a2aTaskTimeout) || 120,
+            a2a_trusted_agents: settings.a2aTrustedAgents
+                ? settings.a2aTrustedAgents.split('\n').map(s => s.trim()).filter(Boolean)
+                : [],
             soul_enabled: settings.soulEnabled,
             soul_name: settings.soulName,
             soul_archetype: settings.soulArchetype,

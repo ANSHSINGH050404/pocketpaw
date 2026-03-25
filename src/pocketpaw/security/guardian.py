@@ -81,7 +81,7 @@ Respond with valid JSON only:
             is_safe, reason = self._local_safety_check(command)
             severity = AuditSeverity.INFO if is_safe else AuditSeverity.ALERT
             logger.warning(
-                "Guardian LLM unavailable (no API key). Local safety check: %s — %s",
+                "Guardian LLM unavailable (no API key). Local safety check: %s - %s",
                 "allow" if is_safe else "block",
                 reason,
             )
@@ -117,6 +117,22 @@ Respond with valid JSON only:
                 system=self.SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": f"Command: {command}"}],
             )
+            if not response.content:
+                self._audit.log(
+                    AuditEvent.create(
+                        severity=AuditSeverity.ALERT,
+                        actor="guardian",
+                        action="scan_result",
+                        target="shell",
+                        status="block",
+                        reason="Empty safety response",
+                        command=command,
+                    )
+                )
+                logger.warning(
+                    "Guardian received empty response from API - defaulting to DANGEROUS"
+                )
+                return False, "Guardian received empty response from API, defaulting to block"
 
             content = response.content[0].text
             import json
@@ -150,9 +166,18 @@ Respond with valid JSON only:
 
         except Exception as e:
             logger.error(f"Guardian check failed: {e}")
-            # FAL-SAFE: If Guardian fails, we should probably BLOCK for high security contexts
-            # But for usability, we might ALLOW with warning.
-            # Security-first: BLOCK.
+            # Fail-closed: block on error.
+            self._audit.log(
+                AuditEvent.create(
+                    severity=AuditSeverity.ALERT,
+                    actor="guardian",
+                    action="scan_error",
+                    target="shell",
+                    status="block",
+                    reason=f"Guardian error: {e}",
+                    command=command,
+                )
+            )
             return False, f"Guardian error: {str(e)}"
 
 

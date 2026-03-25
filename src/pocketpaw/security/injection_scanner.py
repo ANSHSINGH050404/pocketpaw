@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -132,6 +133,19 @@ class InjectionScanner:
     Tier 2: Optional LLM deep scan (Haiku classifier) for suspicious content.
     """
 
+    @staticmethod
+    def _normalize(text: str) -> str:
+        """Normalize Unicode to defeat homoglyph and encoding obfuscation.
+
+        NFKC normalization collapses fullwidth characters (e.g. U+FF1A to ':'),
+        strips zero-width characters, and normalizes combining marks.
+        """
+        # NFKC: fullwidth -> ASCII, compatibility decomposition + canonical composition
+        normalized = unicodedata.normalize("NFKC", text)
+        # Strip zero-width characters (U+200B, U+200C, U+200D, U+FEFF, etc.)
+        normalized = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", normalized)
+        return normalized
+
     def scan(self, content: str, source: str = "unknown") -> ScanResult:
         """Synchronous heuristic scan.
 
@@ -140,14 +154,20 @@ class InjectionScanner:
         if not content:
             return ScanResult(source=source, sanitized_content=content)
 
+        # Normalize Unicode to defeat homoglyph/encoding tricks
+        normalized = self._normalize(content)
+
         matched: list[str] = []
         max_level = ThreatLevel.NONE
 
-        for pattern, name, level in _COMPILED:
-            if pattern.search(content):
-                matched.append(name)
-                if _THREAT_ORDER[level] > _THREAT_ORDER[max_level]:
-                    max_level = level
+        # Scan both original and normalized text
+        for check_text in (content, normalized):
+            for pattern, name, level in _COMPILED:
+                if pattern.search(check_text):
+                    if name not in matched:
+                        matched.append(name)
+                    if _THREAT_ORDER[level] > _THREAT_ORDER[max_level]:
+                        max_level = level
 
         sanitized = content
         if max_level != ThreatLevel.NONE:

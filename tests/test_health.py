@@ -709,6 +709,7 @@ class TestHealthEngine:
             patch(_P_CONFIG_DIR, return_value=tmp_path),
             patch(_P_SETTINGS, return_value=settings),
             patch("importlib.util.find_spec", return_value=MagicMock()),
+            patch.dict("os.environ", {}, clear=True),
         ):
             engine.run_startup_checks()
 

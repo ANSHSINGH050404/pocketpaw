@@ -9,6 +9,9 @@ from pocketpaw.tools.protocol import BaseTool
 
 logger = logging.getLogger(__name__)
 
+# Valid Google Drive sharing roles
+_GDRIVE_ROLES: frozenset[str] = frozenset({"reader", "writer", "commenter"})
+
 
 class DriveListTool(BaseTool):
     """List or search files in Google Drive."""
@@ -233,7 +236,7 @@ class DriveShareTool(BaseTool):
         email: str,
         role: str = "reader",
     ) -> str:
-        if role not in ("reader", "writer", "commenter"):
+        if role not in _GDRIVE_ROLES:
             return self._error(f"Invalid role '{role}'. Use reader, writer, or commenter.")
 
         try:

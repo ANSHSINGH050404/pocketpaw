@@ -320,7 +320,8 @@ async def test_send_media_files(adapter):
 # ── Streaming via _send_command ─────────────────────────────────────
 
 
-async def test_stream_start(adapter):
+async def test_stream_buffers_short_chunks(adapter):
+    """Short chunks are buffered, not sent to Discord immediately."""
     adapter._proc = MagicMock()
     adapter._send_command = AsyncMock(return_value={"stream_id": "s1"})
 
@@ -332,11 +333,89 @@ async def test_stream_start(adapter):
     )
     await adapter.send(chunk)
 
+    # Stream should NOT have started yet (content is below buffer threshold)
+    assert "12345" not in adapter._active_streams
+    assert adapter._stream_buffer["12345"] == "Hello "
+
+
+async def test_stream_flushes_above_threshold(adapter):
+    """Once buffered content exceeds threshold, stream starts."""
+    adapter._proc = MagicMock()
+    adapter._send_command = AsyncMock(return_value={"stream_id": "s1"})
+
+    # Send enough content to exceed the 25-char buffer threshold
+    long_content = "This is a response that exceeds the buffer threshold easily"
+    chunk = OutboundMessage(
+        channel=Channel.DISCORD,
+        chat_id="12345",
+        content=long_content,
+        is_stream_chunk=True,
+    )
+    await adapter.send(chunk)
+
     adapter._send_command.assert_any_call(
         "stream_start", channel_id="12345", reply_to=None, interaction_token=None
     )
-    adapter._send_command.assert_any_call("stream_chunk", stream_id="s1", content="Hello ")
+    adapter._send_command.assert_any_call("stream_chunk", stream_id="s1", content=long_content)
     assert adapter._active_streams["12345"] == "s1"
+
+
+async def test_stream_end_flushes_short_buffer(adapter):
+    """Short buffered content is sent as a regular message at stream_end."""
+    adapter._proc = MagicMock()
+    adapter._send_command = AsyncMock(return_value={"ok": True})
+
+    # Buffer a short chunk
+    chunk = OutboundMessage(
+        channel=Channel.DISCORD,
+        chat_id="12345",
+        content="Short reply",
+        is_stream_chunk=True,
+    )
+    await adapter.send(chunk)
+    assert "12345" not in adapter._active_streams
+
+    # End the stream — buffered content should be sent as regular message
+    end = OutboundMessage(
+        channel=Channel.DISCORD,
+        chat_id="12345",
+        content="",
+        is_stream_end=True,
+    )
+    await adapter.send(end)
+
+    adapter._send_command.assert_any_call("typing_stop", channel_id="12345")
+    adapter._send_command.assert_any_call("send", channel_id="12345", content="Short reply")
+
+
+async def test_stream_suppresses_no_response(adapter):
+    """[NO_RESPONSE] streamed across chunks is buffered and suppressed."""
+    adapter._proc = MagicMock()
+    adapter._send_command = AsyncMock(return_value={"ok": True})
+
+    # Simulate [NO_RESPONSE] arriving in chunks
+    for part in ["[NO_", "RESPONSE]"]:
+        chunk = OutboundMessage(
+            channel=Channel.DISCORD,
+            chat_id="12345",
+            content=part,
+            is_stream_chunk=True,
+        )
+        await adapter.send(chunk)
+
+    # Stream should NOT have started
+    assert "12345" not in adapter._active_streams
+
+    # End the stream — should suppress and stop typing
+    end = OutboundMessage(
+        channel=Channel.DISCORD,
+        chat_id="12345",
+        content="",
+        is_stream_end=True,
+    )
+    await adapter.send(end)
+
+    adapter._send_command.assert_called_once_with("typing_stop", channel_id="12345")
 
 
 async def test_stream_end(adapter):

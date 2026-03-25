@@ -421,8 +421,8 @@ class TestPlaintextMigration:
         assert store.get("anthropic_api_key") == "sk-ant-old"
         assert store.get("openai_api_key") == "sk-old-openai"
 
-    def test_plaintext_keys_preserved_in_config_json(self, env):
-        """After migration, config.json still has the keys (as fallback)."""
+    def test_plaintext_keys_removed_from_config_json(self, env):
+        """After migration, plaintext secrets are removed from config.json."""
         from pocketpaw.config import Settings
 
         old_config = {
@@ -435,9 +435,10 @@ class TestPlaintextMigration:
         Settings.load()
 
         updated = json.loads((env["tmp_path"] / "config.json").read_text(encoding="utf-8"))
-        # Keys remain in config.json as fallback (file is chmod 600)
-        assert updated.get("telegram_bot_token") == "123:AAOldToken"
-        assert updated.get("anthropic_api_key") == "sk-ant-old"
+        # Plaintext secrets should be removed after migration
+        assert "telegram_bot_token" not in updated
+        assert "anthropic_api_key" not in updated
+        # Non-secret fields should remain
         assert updated.get("agent_backend") == "claude_agent_sdk"
 
     def test_migration_flag_created(self, env):

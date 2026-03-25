@@ -172,6 +172,17 @@ class AuthorizationServer:
         )
         self.storage.store_token(token)
 
+        try:
+            from pocketpaw.security.audit import get_audit_logger
+
+            get_audit_logger().log_api_event(
+                action="oauth_token_refreshed",
+                target=f"client:{old_token.client_id}",
+                scope=old_token.scope,
+            )
+        except Exception:
+            logger.warning("Failed to write audit log for OAuth2 token refresh", exc_info=True)
+
         return {
             "access_token": new_access,
             "refresh_token": new_refresh,
@@ -182,9 +193,25 @@ class AuthorizationServer:
 
     def revoke(self, token: str) -> bool:
         """Revoke an access or refresh token."""
-        if self.storage.revoke_token(token):
-            return True
-        return self.storage.revoke_by_refresh(token)
+        revoked = self.storage.revoke_token(token)
+        if not revoked:
+            revoked = self.storage.revoke_by_refresh(token)
+
+        if revoked:
+            try:
+                from pocketpaw.security.audit import AuditSeverity, get_audit_logger
+
+                get_audit_logger().log_api_event(
+                    action="oauth_token_revoked",
+                    target="oauth_token",
+                    severity=AuditSeverity.WARNING,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to write audit log for OAuth2 token revocation", exc_info=True
+                )
+
+        return revoked
 
     def verify_access_token(self, access_token: str) -> OAuthToken | None:
         """Verify an access token and return the token record if valid."""

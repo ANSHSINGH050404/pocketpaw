@@ -39,6 +39,7 @@ _BACKEND_MODEL_ATTR: dict[str, str] = {
     "codex_cli": "codex_cli_model",
     "copilot_sdk": "copilot_sdk_model",
     "opencode": "opencode_model",
+    "deep_agents": "deep_agents_model",
 }
 
 # -- Maps provider name -> settings attribute for provider-level model --

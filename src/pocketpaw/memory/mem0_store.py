@@ -21,6 +21,12 @@ from pocketpaw.memory.protocol import MemoryEntry, MemoryType
 
 logger = logging.getLogger(__name__)
 
+# Metadata keys that are stored as dedicated fields and must be excluded when
+# building the generic metadata dict for a MemoryEntry.
+_RESERVED_METADATA_KEYS: frozenset[str] = frozenset(
+    {"pocketpaw_type", "tags", "created_at", "role"}
+)
+
 # Embedding dimensions by model
 _EMBEDDING_DIMS = {
     "text-embedding-3-small": 1536,
@@ -569,11 +575,7 @@ class Mem0MemoryStore:
             created_at=created_at,
             updated_at=datetime.now(tz=UTC),
             tags=metadata.get("tags", []),
-            metadata={
-                k: v
-                for k, v in metadata.items()
-                if k not in ("pocketpaw_type", "tags", "created_at", "role")
-            },
+            metadata={k: v for k, v in metadata.items() if k not in _RESERVED_METADATA_KEYS},
             role=role,
             session_key=metadata.get("session_key"),
         )

@@ -1,6 +1,6 @@
 # ---- Node.js stage ----
 # Copy Node.js from the official image instead of curl|bash from NodeSource
-FROM node:22-slim AS node
+FROM node:22.14.0-slim AS node
 
 # Pre-install CLI-based agent backends so they're cached in this layer
 RUN npm install -g @anthropic-ai/claude-code @openai/codex && \

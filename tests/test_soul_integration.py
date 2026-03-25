@@ -82,7 +82,7 @@ class TestSoulIntegration:
         _reset_manager()
 
     async def test_soul_tools_injected_into_tool_bridge(self, tmp_path):
-        """When soul is active, tool_bridge discovers soul tools."""
+        """When soul is active, tool_bridge discovers all soul tools."""
         from pocketpaw.config import Settings
         from pocketpaw.soul.manager import SoulManager, _reset_manager
 
@@ -104,6 +104,8 @@ class TestSoulIntegration:
         assert "soul_recall" in tool_names
         assert "soul_edit_core" in tool_names
         assert "soul_status" in tool_names
+        assert "soul_evaluate" in tool_names
+        assert "soul_reload" in tool_names
 
         _reset_manager()
 

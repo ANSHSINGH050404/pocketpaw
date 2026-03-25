@@ -9,21 +9,21 @@ tags: ["backends", "configuration"]
 
 # Agent Backends: Choose Your AI Engine
 
-PocketPaw supports **six agent backends** built on a unified `AgentBackend` protocol. Each backend provides different capabilities and trade-offs. All backends yield standardized `AgentEvent` objects, so switching is seamless.
+PocketPaw supports **seven agent backends** built on a unified `AgentBackend` protocol. Each backend provides different capabilities and trade-offs. All backends yield standardized `AgentEvent` objects, so switching is seamless.
 
 ## Backend Comparison
 
-| Feature | Claude SDK | OpenAI Agents | Google ADK | Codex CLI | OpenCode | Copilot SDK |
-|---------|-----------|---------------|------------|-----------|----------|-------------|
-| Status | Production | Beta | Beta | Beta | Beta | Beta |
-| Streaming | Yes | Yes | Yes | Yes | Yes | Yes |
-| Tools | Yes | Yes | Yes | Yes | Yes | Yes |
-| MCP | Yes | No | Yes | Yes | No | No |
-| Multi-turn | Yes | Yes | Yes | Yes | Yes | Yes |
-| Local models | Ollama | Ollama | No | No | No | No |
-| OpenRouter | Partial | Yes | No | No | No | No |
-| LiteLLM | Yes | Yes | Yes | No | No | Yes |
-| Required key | [Anthropic API key](https://console.anthropic.com/settings/keys) | OpenAI | Google | OpenAI | None | None |
+| Feature | Claude SDK | OpenAI Agents | Google ADK | Deep Agents | Codex CLI | OpenCode | Copilot SDK |
+|---------|-----------|---------------|------------|-------------|-----------|----------|-------------|
+| Status | Production | Beta | Beta | Beta | Beta | Beta | Beta |
+| Streaming | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Tools | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| MCP | Yes | No | Yes | .mcp.json | Yes | No | No |
+| Multi-turn | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Local models | Ollama | Ollama | No | Ollama | No | No | No |
+| OpenRouter | Partial | Yes | No | Yes | No | No | No |
+| LiteLLM | Yes | Yes | Yes | Yes | No | No | Yes |
+| Required key | [Anthropic API key](https://console.anthropic.com/settings/keys) | OpenAI | Google | None | OpenAI | None | None |
 
 ## Switching Backends
 
@@ -36,17 +36,18 @@ export POCKETPAW_AGENT_BACKEND="google_adk"
 export POCKETPAW_AGENT_BACKEND="codex_cli"
 export POCKETPAW_AGENT_BACKEND="opencode"
 export POCKETPAW_AGENT_BACKEND="copilot_sdk"
+export POCKETPAW_AGENT_BACKEND="deep_agents"
 ```
 
 Or change it in the web dashboard's **Settings** panel — the backend dropdown shows available backends with capability badges.
 
 ## Full Tool Access
 
-All six backends have access to PocketPaw's 50+ built-in tools (file operations, web search, memory, integrations, and more). Tools are wrapped differently for each backend's expectations through a unified tool bridge:
+All seven backends have access to PocketPaw's 50+ built-in tools (file operations, web search, memory, integrations, and more). Tools are wrapped differently for each backend's expectations through a unified tool bridge:
 
 - **Claude SDK** uses native SDK tools (Bash, Read, Write, etc.)
 - **OpenAI Agents** and **Copilot SDK** wrap tools as `FunctionTool` objects with JSON schema
-- **Google ADK** wraps tools as Python callables with introspected signatures
+- **Google ADK** and **Deep Agents** wrap tools as Python callables with introspected signatures
 - **Codex CLI** and **OpenCode** inject tool instructions into the system prompt with a CLI bridge
 
 Tool availability is governed by the same [Tool Policy](/tools/tool-policy) system across all backends. Profiles (`safe`, `dev`, `full`) and per-tool allow/deny lists work identically regardless of backend.
@@ -105,6 +106,9 @@ The dashboard shows capability badges for each backend so you can compare at a g
   </Card>
   <Card title="Copilot SDK" icon="lucide:github" href="/backends/copilot-sdk">
     GitHub Copilot SDK with multi-provider support (Copilot, OpenAI, Azure, Anthropic).
+  </Card>
+  <Card title="Deep Agents" icon="lucide:workflow" href="/backends/deep-agents">
+    LangChain/LangGraph backend with built-in planning, subagent delegation, and multi-provider support.
   </Card>
   <Card title="Ollama (Local LLMs)" icon="lucide:hard-drive" href="/backends/ollama">
     Run fully local with supported backends — no API keys, no cloud, no costs.

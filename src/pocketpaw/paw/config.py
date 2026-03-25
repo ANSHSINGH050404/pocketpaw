@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# YAML null-like values (used in the fallback parser loop)
+_YAML_NULL_VALUES: frozenset[str] = frozenset({"null", "~", ""})
+
 
 @dataclass
 class PawConfig:
@@ -71,7 +74,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
                 if ":" in line:
                     key, _, value = line.partition(":")
                     value = value.strip().strip("\"'")
-                    if value.lower() in ("null", "~", ""):
+                    if value.lower() in _YAML_NULL_VALUES:
                         result[key.strip()] = None
                     else:
                         result[key.strip()] = value

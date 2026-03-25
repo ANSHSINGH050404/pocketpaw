@@ -43,11 +43,15 @@ class SoulBootstrapProvider:
 
         system_prompt = soul.to_system_prompt()
 
-        # Extract personality and mood for style hints
+        # Extract personality, mood, and biorhythm for style hints
         state = soul.state
         mood_hint = f"Current mood: {state.mood}" if hasattr(state, "mood") else ""
         energy_hint = f"Energy: {state.energy}" if hasattr(state, "energy") else ""
-        style_parts = [s for s in [mood_hint, energy_hint] if s]
+        tired_hint = ""
+        if hasattr(state, "energy") and hasattr(state, "tired_threshold"):
+            if state.energy <= state.tired_threshold:
+                tired_hint = "Status: fatigued (low energy)"
+        style_parts = [s for s in [mood_hint, energy_hint, tired_hint] if s]
 
         # Pull active self-images for knowledge context
         knowledge: list[str] = []
